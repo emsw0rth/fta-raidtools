@@ -1,2 +1,82 @@
-# fta-raidtools
-Tools for WoW TBC Anni guild From the Ashes
+# FTA Raid Tools
+
+A desktop application for the World of Warcraft TBC Anniversary guild **From the Ashes**. Built with Electron, it connects to Google Sheets to manage guild loot history and roster data.
+
+## Features
+
+### Loot History
+- View and edit loot history in a sortable, filterable data grid
+- Load loot data from a Google Sheet (tab: `loothistory`)
+- Save changes back to the Google Sheet
+- Import loot entries from CSV files with automatic duplicate detection
+- Hover over item names to see Wowhead tooltips with item icon, stats, and details
+
+### Guild Roster
+- View and edit the guild roster (tab: `roster`)
+- Columns: Name, Rank, Class, MS, OS, Alt, Profession 1, Profession 2, Notes
+- Add new members via a form modal that auto-saves to the sheet
+- Load and save roster data to/from Google Sheets
+
+### Settings
+- Configure the Google Sheet URL
+- Select a Google Cloud service account key file for authentication
+
+## Installation
+
+Download the latest `FTA Raid Tools Setup x.x.x.exe` from the releases and run it. Windows may show a SmartScreen warning since the app is not code-signed — click "More info" > "Run anyway".
+
+## Google Sheets Setup
+
+The app uses a Google Cloud service account to read and write sheet data. To set this up:
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a project (or use an existing one)
+3. Enable the **Google Sheets API** (APIs & Services > Library)
+4. Go to **APIs & Services > Credentials > Create Credentials > Service Account**
+5. Name the service account and click through the wizard
+6. Go to the service account's **Keys** tab > **Add Key > Create new key > JSON**
+7. Save the downloaded JSON key file somewhere safe
+8. Open your Google Sheet and click **Share** — add the service account email (the `client_email` from the JSON file) as an **Editor**
+
+### Google Sheet Structure
+
+The Google Sheet should have the following tabs:
+
+**`loothistory`** — columns:
+| Date | Player | Item | ItemID |
+|------|--------|------|--------|
+
+**`roster`** — columns:
+| Name | Rank | Class | MS | OS | Alt | Profession 1 | Profession 2 | Notes |
+|------|------|-------|----|----|-----|---------------|---------------|-------|
+
+## Development
+
+### Prerequisites
+- Node.js (v18+)
+- npm
+
+### Getting Started
+
+```bash
+npm install
+npm run dev
+```
+
+### Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Compile and launch the app in development mode |
+| `npm run build` | Compile TypeScript and bundle the renderer |
+| `npm start` | Launch the app (requires a prior build) |
+| `npm run dist` | Build and package a Windows installer |
+
+### Tech Stack
+
+- **Electron** — desktop application framework
+- **TypeScript** — type-safe JavaScript
+- **esbuild** — fast renderer bundling
+- **ag-Grid** — data grid component
+- **google-auth-library** — Google Sheets API authentication
+- **electron-builder** — application packaging and distribution

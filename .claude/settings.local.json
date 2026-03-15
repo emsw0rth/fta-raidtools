@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(cd /c/dev/projects/fta-raidtools && npm run dev)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "WebSearch",
+      "WebFetch(domain:www.wowhead.com)",
+      "WebFetch(domain:nether.wowhead.com)",
+      "Bash(git add:*)"
+    ]
+  }
+}

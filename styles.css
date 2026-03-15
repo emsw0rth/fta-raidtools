@@ -1,0 +1,367 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: #0d0a07;
+  color: #e8d5b5;
+  display: flex;
+  flex-direction: column;
+}
+
+/* App Banner */
+.app-banner-wrap {
+  position: relative;
+}
+
+.app-banner {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.app-version {
+  position: absolute;
+  bottom: 6px;
+  right: 10px;
+  font-size: 0.7rem;
+  color: rgba(232, 213, 181, 0.5);
+}
+
+/* Organism: App Header */
+.app-header {
+  background-color: #1a1008;
+  padding: 0.75rem 2rem;
+  border-bottom: 2px solid #5c3a10;
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+
+.app-header__title {
+  color: #d4a535;
+  font-size: 1.5rem;
+  white-space: nowrap;
+}
+
+/* Molecule: Nav Menu */
+.nav-menu {
+  display: flex;
+  gap: 0.25rem;
+}
+
+/* Atom: Nav Link */
+.nav-link {
+  color: #a08a6a;
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.nav-link:hover {
+  color: #e8d5b5;
+  background-color: rgba(212, 165, 53, 0.12);
+}
+
+.nav-link--active {
+  color: #d4a535;
+  background-color: rgba(212, 165, 53, 0.18);
+}
+
+/* Main content */
+main {
+  padding: 2rem;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Loot History Page */
+.loot-history-toolbar {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.loot-history-grid {
+  height: 100%;
+}
+
+/* Grid wrapper & spinner */
+.grid-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.grid-wrap .loot-history-grid {
+  height: 100%;
+}
+
+.grid-spinner {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(13, 10, 7, 0.7);
+}
+
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #5c3a10;
+  border-top-color: #d4a535;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Buttons */
+.btn {
+  padding: 0.4rem 1rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.btn--primary {
+  background-color: #5c3a10;
+  color: #e8d5b5;
+}
+
+.btn--primary:hover {
+  background-color: #7a4e18;
+}
+
+.btn--danger {
+  background-color: #5c1a1a;
+  color: #e8d5b5;
+}
+
+.btn--danger:hover {
+  background-color: #7a2020;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Settings Page */
+.settings-page h2 {
+  margin-bottom: 1.5rem;
+  color: #d4a535;
+}
+
+.settings-form {
+  max-width: 600px;
+}
+
+.settings-label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  color: #c4a878;
+}
+
+.settings-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #5c3a10;
+  border-radius: 4px;
+  background-color: #1a1008;
+  color: #e8d5b5;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.settings-input:focus {
+  border-color: #d4a535;
+}
+
+.settings-key-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.settings-key-row .settings-input {
+  flex: 1;
+}
+
+.settings-label + .settings-label,
+.settings-input + .settings-label,
+.settings-key-row + .settings-label {
+  margin-top: 1rem;
+}
+
+.settings-hint {
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  color: #7a6a4a;
+}
+
+.settings-actions {
+  margin-top: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.settings-status {
+  font-size: 0.85rem;
+  color: #d4a535;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal {
+  background-color: #1a1008;
+  border: 1px solid #5c3a10;
+  border-radius: 8px;
+  padding: 1.5rem;
+  width: 420px;
+  max-width: 90vw;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7);
+}
+
+.modal__title {
+  color: #d4a535;
+  margin-bottom: 1.25rem;
+  font-size: 1.1rem;
+}
+
+.modal__field {
+  margin-bottom: 0.75rem;
+}
+
+.modal__label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #c4a878;
+  margin-bottom: 0.3rem;
+}
+
+.modal__input {
+  width: 100%;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid #5c3a10;
+  border-radius: 4px;
+  background-color: #0d0a07;
+  color: #e8d5b5;
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.modal__input:focus {
+  border-color: #d4a535;
+}
+
+.modal__actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+  justify-content: flex-end;
+}
+
+/* Wowhead Item Tooltip */
+.wowhead-tooltip {
+  display: none;
+  position: fixed;
+  z-index: 9999;
+  max-width: 340px;
+  background-color: #1a1008;
+  border: 1px solid #5c3a10;
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: #e8d5b5;
+  pointer-events: none;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7);
+}
+
+.wowhead-tooltip__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.wowhead-tooltip__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  border: 1px solid #5c3a10;
+  flex-shrink: 0;
+}
+
+.wowhead-tooltip__name {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/* WoW quality colors */
+.wowhead-tooltip__name[data-quality="0"] { color: #9d9d9d; }
+.wowhead-tooltip__name[data-quality="1"] { color: #ffffff; }
+.wowhead-tooltip__name[data-quality="2"] { color: #1eff00; }
+.wowhead-tooltip__name[data-quality="3"] { color: #0070dd; }
+.wowhead-tooltip__name[data-quality="4"] { color: #a335ee; }
+.wowhead-tooltip__name[data-quality="5"] { color: #ff8000; }
+.wowhead-tooltip__name[data-quality="6"] { color: #e6cc80; }
+
+.wowhead-tooltip__body {
+  font-size: 0.78rem;
+}
+
+.wowhead-tooltip__body table {
+  width: 100%;
+}
+
+.wowhead-tooltip__body td {
+  padding: 0;
+}
+
+.wowhead-tooltip__body .q0 { color: #9d9d9d; }
+.wowhead-tooltip__body .q { color: #ffd100; }
+.wowhead-tooltip__body .q2 { color: #1eff00; }
+.wowhead-tooltip__body .q3 { color: #0070dd; }
+
+.wowhead-tooltip__loading {
+  color: #7a6a4a;
+  font-style: italic;
+  padding: 4px;
+}
