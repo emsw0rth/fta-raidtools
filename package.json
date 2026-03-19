@@ -39,6 +39,7 @@
       "icon": "images/fta-logo.png",
       "signAndEditExecutable": false
     },
+    "artifactName": "FTA-Raid-Tools-Setup-${version}.${ext}",
     "nsis": {
       "oneClick": true,
       "perMachine": false,
