@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.3.0
+
+### Added
+- **Minimum/Maximum rollModifier settings**: Two new fields on the Settings page, persisted to the settings sheet
+  - Attendance awards now cap the roll modifier at the configured maximum
+  - Loot history deductions now floor the roll modifier at the configured minimum
+
 ## v1.2.0
 
 ### Added

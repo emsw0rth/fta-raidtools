@@ -115,6 +115,8 @@ export function createSettingsPage(): HTMLElement {
   const newMember = createNumberField("New member value", "1.0");
   const awardCompletion = createNumberField("Award for raid completion", "0.2");
   const deductionWin = createNumberField("Deduction on item win", "0.1");
+  const minRollMod = createNumberField("Minimum rollModifier", "0");
+  const maxRollMod = createNumberField("Maximum rollModifier", "10");
 
   rollForm.appendChild(newMember.label);
   rollForm.appendChild(newMember.input);
@@ -122,6 +124,10 @@ export function createSettingsPage(): HTMLElement {
   rollForm.appendChild(awardCompletion.input);
   rollForm.appendChild(deductionWin.label);
   rollForm.appendChild(deductionWin.input);
+  rollForm.appendChild(minRollMod.label);
+  rollForm.appendChild(minRollMod.input);
+  rollForm.appendChild(maxRollMod.label);
+  rollForm.appendChild(maxRollMod.input);
 
   rollSection.appendChild(rollForm);
   page.appendChild(rollSection);
@@ -143,6 +149,8 @@ export function createSettingsPage(): HTMLElement {
         { key: "New member value", value: newMember.input.value.trim() },
         { key: "Award for raid completion", value: awardCompletion.input.value.trim() },
         { key: "Deduction on item win", value: deductionWin.input.value.trim() },
+        { key: "Minimum rollModifier", value: minRollMod.input.value.trim() },
+        { key: "Maximum rollModifier", value: maxRollMod.input.value.trim() },
       ];
       settingsStore.replaceAll(entries);
 
@@ -173,6 +181,8 @@ export function createSettingsPage(): HTMLElement {
     newMember.input.value = settingsStore.get("New member value");
     awardCompletion.input.value = settingsStore.get("Award for raid completion");
     deductionWin.input.value = settingsStore.get("Deduction on item win");
+    minRollMod.input.value = settingsStore.get("Minimum rollModifier");
+    maxRollMod.input.value = settingsStore.get("Maximum rollModifier");
   }
 
   loadFromStore();

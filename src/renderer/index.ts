@@ -133,7 +133,7 @@ function init(): void {
 
   const version = document.createElement("span");
   version.className = "app-version";
-  version.textContent = "v1.2.0";
+  version.textContent = "v1.3.0";
 
   bannerWrap.appendChild(banner);
   bannerWrap.appendChild(version);

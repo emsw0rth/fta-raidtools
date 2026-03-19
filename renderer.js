@@ -58915,7 +58915,12 @@ If you are trying to annotate ${containerName} with application data, use the '$
           continue;
         }
         const current = parseFloat(rosterEntry.rollModifier) || 1;
-        rosterEntry.rollModifier = String(parseFloat((current - deductionSetting).toFixed(4)));
+        let newMod = parseFloat((current - deductionSetting).toFixed(4));
+        const minRollMod = parseFloat(settingsStore.get("Minimum rollModifier"));
+        if (!isNaN(minRollMod) && newMod < minRollMod) {
+          newMod = minRollMod;
+        }
+        rosterEntry.rollModifier = String(newMod);
         entries[i].deducted = String(deductionSetting);
         rosterChanged = true;
       }
@@ -59669,7 +59674,12 @@ If you are trying to annotate ${containerName} with application data, use the '$
         continue;
       }
       const currentMod = parseFloat(rosterEntry.rollModifier) || 0;
-      rosterEntry.rollModifier = String(parseFloat((currentMod + points).toFixed(4)));
+      let newMod = parseFloat((currentMod + points).toFixed(4));
+      const maxRollMod = parseFloat(settingsStore.get("Maximum rollModifier"));
+      if (!isNaN(maxRollMod) && newMod > maxRollMod) {
+        newMod = maxRollMod;
+      }
+      rosterEntry.rollModifier = String(newMod);
     }
     rosterStore.replaceAll(roster);
     const rosterRows = roster.map((e) => [
@@ -59876,12 +59886,18 @@ If you are trying to annotate ${containerName} with application data, use the '$
     const newMember = createNumberField("New member value", "1.0");
     const awardCompletion = createNumberField("Award for raid completion", "0.2");
     const deductionWin = createNumberField("Deduction on item win", "0.1");
+    const minRollMod = createNumberField("Minimum rollModifier", "0");
+    const maxRollMod = createNumberField("Maximum rollModifier", "10");
     rollForm.appendChild(newMember.label);
     rollForm.appendChild(newMember.input);
     rollForm.appendChild(awardCompletion.label);
     rollForm.appendChild(awardCompletion.input);
     rollForm.appendChild(deductionWin.label);
     rollForm.appendChild(deductionWin.input);
+    rollForm.appendChild(minRollMod.label);
+    rollForm.appendChild(minRollMod.input);
+    rollForm.appendChild(maxRollMod.label);
+    rollForm.appendChild(maxRollMod.input);
     rollSection.appendChild(rollForm);
     page.appendChild(rollSection);
     saveBtn.addEventListener("click", async () => {
@@ -59895,7 +59911,9 @@ If you are trying to annotate ${containerName} with application data, use the '$
         const entries = [
           { key: "New member value", value: newMember.input.value.trim() },
           { key: "Award for raid completion", value: awardCompletion.input.value.trim() },
-          { key: "Deduction on item win", value: deductionWin.input.value.trim() }
+          { key: "Deduction on item win", value: deductionWin.input.value.trim() },
+          { key: "Minimum rollModifier", value: minRollMod.input.value.trim() },
+          { key: "Maximum rollModifier", value: maxRollMod.input.value.trim() }
         ];
         settingsStore.replaceAll(entries);
         const settingsRows = [
@@ -59922,6 +59940,8 @@ If you are trying to annotate ${containerName} with application data, use the '$
       newMember.input.value = settingsStore.get("New member value");
       awardCompletion.input.value = settingsStore.get("Award for raid completion");
       deductionWin.input.value = settingsStore.get("Deduction on item win");
+      minRollMod.input.value = settingsStore.get("Minimum rollModifier");
+      maxRollMod.input.value = settingsStore.get("Maximum rollModifier");
     }
     loadFromStore();
     settingsStore.subscribe(loadFromStore);
@@ -60208,7 +60228,7 @@ If you are trying to annotate ${containerName} with application data, use the '$
     banner.alt = "From the Ashes";
     const version = document.createElement("span");
     version.className = "app-version";
-    version.textContent = "v1.2.0";
+    version.textContent = "v1.3.0";
     bannerWrap.appendChild(banner);
     bannerWrap.appendChild(version);
     body.appendChild(bannerWrap);

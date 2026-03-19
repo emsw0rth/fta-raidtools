@@ -305,7 +305,12 @@ async function confirmAndAward(list: HTMLElement, event: RaidHelperEvent, eventI
     }
 
     const currentMod = parseFloat(rosterEntry.rollModifier) || 0;
-    rosterEntry.rollModifier = String(parseFloat((currentMod + points).toFixed(4)));
+    let newMod = parseFloat((currentMod + points).toFixed(4));
+    const maxRollMod = parseFloat(settingsStore.get("Maximum rollModifier"));
+    if (!isNaN(maxRollMod) && newMod > maxRollMod) {
+      newMod = maxRollMod;
+    }
+    rosterEntry.rollModifier = String(newMod);
   }
 
   // Save updated roster

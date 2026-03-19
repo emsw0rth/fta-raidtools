@@ -38,7 +38,8 @@ A desktop application for the World of Warcraft TBC Anniversary guild **From the
 ### Settings
 - Configure the Google Sheet URL
 - Select a Google Cloud service account key file for authentication
-- **Balanced Roll settings**: New member value, Award for raid completion, Deduction on item win
+- **Balanced Roll settings**: New member value, Award for raid completion, Deduction on item win, Minimum rollModifier, Maximum rollModifier
+- Roll modifiers are clamped to the configured minimum (on loot deductions) and maximum (on attendance awards)
 - Settings stored in the `settings` sheet tab and preloaded on app start
 
 ### Auto-Update

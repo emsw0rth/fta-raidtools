@@ -283,7 +283,12 @@ function showImportModal(entries: LootEntry[]): void {
       }
 
       const current = parseFloat(rosterEntry.rollModifier) || 1;
-      rosterEntry.rollModifier = String(parseFloat((current - deductionSetting).toFixed(4)));
+      let newMod = parseFloat((current - deductionSetting).toFixed(4));
+      const minRollMod = parseFloat(settingsStore.get("Minimum rollModifier"));
+      if (!isNaN(minRollMod) && newMod < minRollMod) {
+        newMod = minRollMod;
+      }
+      rosterEntry.rollModifier = String(newMod);
       entries[i].deducted = String(deductionSetting);
       rosterChanged = true;
     }
