@@ -30,6 +30,7 @@
     { label: "Loot History", href: "#loot-history", active: true },
     { label: "Roster", href: "#roster" },
     { label: "Attendance", href: "#attendance" },
+    { label: "Raid", href: "#raid" },
     { label: "Settings", href: "#settings" }
   ];
   function createAppHeader(onNavigate) {
@@ -58545,6 +58546,104 @@ If you are trying to annotate ${containerName} with application data, use the '$
   };
   var lootStore = new LootStore();
 
+  // src/renderer/store/RosterStore.ts
+  var STORAGE_KEY2 = "fta-roster";
+  var RosterStore = class {
+    entries = [];
+    listeners = /* @__PURE__ */ new Set();
+    constructor() {
+      this.load();
+    }
+    getAll() {
+      return [...this.entries];
+    }
+    add(entry) {
+      this.entries.push(entry);
+      this.persist();
+      this.notify();
+    }
+    remove(entries) {
+      const toRemove = new Set(entries);
+      this.entries = this.entries.filter((e) => !toRemove.has(e));
+      this.persist();
+      this.notify();
+    }
+    replaceAll(entries) {
+      this.entries = entries;
+      this.persist();
+      this.notify();
+    }
+    subscribe(listener) {
+      this.listeners.add(listener);
+      return () => this.listeners.delete(listener);
+    }
+    notify() {
+      this.listeners.forEach((fn) => fn());
+    }
+    persist() {
+      try {
+        localStorage.setItem(STORAGE_KEY2, JSON.stringify(this.entries));
+      } catch {
+      }
+    }
+    load() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY2);
+        if (raw) {
+          this.entries = JSON.parse(raw);
+        }
+      } catch {
+        this.entries = [];
+      }
+    }
+  };
+  var rosterStore = new RosterStore();
+
+  // src/renderer/store/SettingsStore.ts
+  var STORAGE_KEY3 = "fta-settings";
+  var SettingsStore = class {
+    entries = [];
+    listeners = /* @__PURE__ */ new Set();
+    constructor() {
+      this.load();
+    }
+    getAll() {
+      return [...this.entries];
+    }
+    get(key) {
+      return this.entries.find((e) => e.key === key)?.value ?? "";
+    }
+    replaceAll(entries) {
+      this.entries = entries;
+      this.persist();
+      this.notify();
+    }
+    subscribe(listener) {
+      this.listeners.add(listener);
+      return () => this.listeners.delete(listener);
+    }
+    notify() {
+      this.listeners.forEach((fn) => fn());
+    }
+    persist() {
+      try {
+        localStorage.setItem(STORAGE_KEY3, JSON.stringify(this.entries));
+      } catch {
+      }
+    }
+    load() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY3);
+        if (raw) {
+          this.entries = JSON.parse(raw);
+        }
+      } catch {
+        this.entries = [];
+      }
+    }
+  };
+  var settingsStore = new SettingsStore();
+
   // src/renderer/services/csvParser.ts
   function parseLootCsv(csv) {
     const lines = csv.trim().split("\n");
@@ -58555,7 +58654,9 @@ If you are trying to annotate ${containerName} with application data, use the '$
         date: fields[0]?.trim() ?? "",
         player: fields[1]?.trim() ?? "",
         item: fields[2]?.trim() ?? "",
-        itemId: fields[3] ? parseInt(fields[3].trim(), 10) || null : null
+        itemId: fields[3] ? parseInt(fields[3].trim(), 10) || null : null,
+        os: false,
+        deducted: ""
       };
     });
   }
@@ -58591,6 +58692,7 @@ If you are trying to annotate ${containerName} with application data, use the '$
 
   // src/renderer/components/pages/LootHistoryPage.ts
   ModuleRegistry.registerModules([AllCommunityModule]);
+  var ROSTER_HEADERS = ["Name", "Raid-Helper name", "Rank", "Class", "MS", "OS", "Main", "Profession 1", "Profession 2", "Roll Modifier", "Notes"];
   var tooltipCache = /* @__PURE__ */ new Map();
   var tooltipEl = null;
   var tooltipTimeout = null;
@@ -58651,7 +58753,9 @@ If you are trying to annotate ${containerName} with application data, use the '$
   var columnDefs = [
     { field: "date", headerName: "Date", width: 180 },
     { field: "player", headerName: "Player", width: 160 },
-    { field: "item", headerName: "Item", flex: 1, minWidth: 200 }
+    { field: "item", headerName: "Item", flex: 1, minWidth: 200 },
+    { field: "os", headerName: "OS?", width: 80 },
+    { field: "deducted", headerName: "Deducted", width: 100 }
   ];
   var gridApi = null;
   function syncToStore() {
@@ -58667,7 +58771,9 @@ If you are trying to annotate ${containerName} with application data, use the '$
       date: row[0]?.trim() ?? "",
       player: row[1]?.trim() ?? "",
       item: row[2]?.trim() ?? "",
-      itemId: row[3] ? parseInt(row[3].trim(), 10) || null : null
+      itemId: row[3] ? parseInt(row[3].trim(), 10) || null : null,
+      os: (row[4]?.trim() ?? "").toLowerCase() === "true",
+      deducted: row[5]?.trim() ?? ""
     }));
   }
   var spinnerEl = null;
@@ -58695,6 +58801,178 @@ If you are trying to annotate ${containerName} with application data, use the '$
       hideSpinner();
     }
   }
+  function showCsvPasteModal(onSubmit) {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    const modal = document.createElement("div");
+    modal.className = "modal import-modal";
+    const title = document.createElement("h3");
+    title.className = "modal__title";
+    title.textContent = "Import data";
+    modal.appendChild(title);
+    const hint = document.createElement("p");
+    hint.className = "settings-hint";
+    hint.textContent = "Paste CSV data below (including header row).";
+    modal.appendChild(hint);
+    const textarea = document.createElement("textarea");
+    textarea.className = "csv-paste-input";
+    textarea.placeholder = "Date,Player,Item,ItemID\n...";
+    textarea.rows = 12;
+    modal.appendChild(textarea);
+    const actions = document.createElement("div");
+    actions.className = "modal__actions modal__actions--right";
+    const cancelBtn = document.createElement("button");
+    cancelBtn.className = "btn";
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.addEventListener("click", () => overlay.remove());
+    const importBtn = document.createElement("button");
+    importBtn.className = "btn btn--primary";
+    importBtn.textContent = "Import";
+    importBtn.addEventListener("click", () => {
+      const csv = textarea.value.trim();
+      if (!csv) return;
+      overlay.remove();
+      onSubmit(csv);
+    });
+    actions.appendChild(cancelBtn);
+    actions.appendChild(importBtn);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+    document.body.appendChild(overlay);
+    textarea.focus();
+  }
+  function showImportModal(entries) {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    const modal = document.createElement("div");
+    modal.className = "modal import-modal";
+    const title = document.createElement("h3");
+    title.className = "modal__title";
+    title.textContent = "Verify Import";
+    modal.appendChild(title);
+    const list = document.createElement("div");
+    list.className = "import-list";
+    const listHeader = document.createElement("div");
+    listHeader.className = "import-row import-row--header";
+    listHeader.innerHTML = `<span class="import-col import-col--date">Date</span><span class="import-col import-col--player">Player</span><span class="import-col import-col--item">Item</span><span class="import-col import-col--os">OS?</span>`;
+    list.appendChild(listHeader);
+    const checkboxes = [];
+    for (const entry of entries) {
+      const row = document.createElement("div");
+      row.className = "import-row";
+      const dateCol = document.createElement("span");
+      dateCol.className = "import-col import-col--date";
+      dateCol.textContent = entry.date;
+      const playerCol = document.createElement("span");
+      playerCol.className = "import-col import-col--player";
+      playerCol.textContent = entry.player;
+      const itemCol = document.createElement("span");
+      itemCol.className = "import-col import-col--item";
+      itemCol.textContent = entry.item;
+      const osCol = document.createElement("span");
+      osCol.className = "import-col import-col--os";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.className = "import-os-checkbox";
+      checkboxes.push(checkbox);
+      osCol.appendChild(checkbox);
+      row.appendChild(dateCol);
+      row.appendChild(playerCol);
+      row.appendChild(itemCol);
+      row.appendChild(osCol);
+      list.appendChild(row);
+    }
+    modal.appendChild(list);
+    const actions = document.createElement("div");
+    actions.className = "modal__actions modal__actions--right";
+    const verifyBtn = document.createElement("button");
+    verifyBtn.className = "btn btn--primary";
+    verifyBtn.textContent = "Verify and import";
+    verifyBtn.addEventListener("click", async () => {
+      verifyBtn.disabled = true;
+      verifyBtn.textContent = "Importing...";
+      const deductionSetting = parseFloat(settingsStore.get("Deduction on item win")) || 0.1;
+      const roster = rosterStore.getAll();
+      const rosterByName = /* @__PURE__ */ new Map();
+      for (const r of roster) {
+        rosterByName.set(r.name.toLowerCase(), r);
+      }
+      let rosterChanged = false;
+      for (let i = 0; i < entries.length; i++) {
+        const isOs = checkboxes[i].checked;
+        entries[i].os = isOs;
+        if (isOs) {
+          entries[i].deducted = "";
+          continue;
+        }
+        const playerName = entries[i].player.trim().toLowerCase();
+        const rosterEntry = rosterByName.get(playerName);
+        if (!rosterEntry) {
+          entries[i].deducted = "";
+          continue;
+        }
+        const current = parseFloat(rosterEntry.rollModifier) || 1;
+        rosterEntry.rollModifier = String(parseFloat((current - deductionSetting).toFixed(4)));
+        entries[i].deducted = String(deductionSetting);
+        rosterChanged = true;
+      }
+      const existing = lootStore.getAll();
+      const merged = [...existing, ...entries];
+      lootStore.replaceAll(merged);
+      gridApi?.setGridOption("rowData", merged);
+      try {
+        const lootHeader = ["Date", "Player", "Item", "ItemID", "OS?", "Deducted"];
+        const lootRows = merged.map((e) => [
+          e.date,
+          e.player,
+          e.item,
+          e.itemId != null ? String(e.itemId) : "",
+          String(e.os),
+          e.deducted
+        ]);
+        await window.api.writeSheet("loothistory", [lootHeader, ...lootRows]);
+      } catch (err) {
+        alert(`Loot imported but failed to save loot history: ${err instanceof Error ? err.message : err}`);
+      }
+      if (rosterChanged) {
+        rosterStore.replaceAll(roster);
+        try {
+          const rosterRows = roster.map((e) => [
+            e.name,
+            e.raidHelperName,
+            e.rank,
+            e.class,
+            e.ms,
+            e.os,
+            e.main,
+            e.profession1,
+            e.profession2,
+            e.rollModifier,
+            e.notes
+          ]);
+          await window.api.writeSheet("roster", [ROSTER_HEADERS, ...rosterRows]);
+        } catch (err) {
+          alert(`Loot imported but failed to save roster: ${err instanceof Error ? err.message : err}`);
+        }
+      }
+      overlay.remove();
+    });
+    const cancelBtn = document.createElement("button");
+    cancelBtn.className = "btn";
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.addEventListener("click", () => overlay.remove());
+    actions.appendChild(cancelBtn);
+    actions.appendChild(verifyBtn);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+    document.body.appendChild(overlay);
+  }
   function createLootHistoryPage() {
     const page = document.createElement("div");
     page.className = "page loot-history-page";
@@ -58715,7 +58993,7 @@ If you are trying to annotate ${containerName} with application data, use the '$
     addBtn.className = "btn btn--primary";
     addBtn.textContent = "Add Row";
     addBtn.addEventListener("click", () => {
-      const newEntry = { date: "", player: "", item: "", itemId: null };
+      const newEntry = { date: "", player: "", item: "", itemId: null, os: false, deducted: "" };
       gridApi?.applyTransaction({ add: [newEntry] });
       syncToStore();
     });
@@ -58731,26 +59009,24 @@ If you are trying to annotate ${containerName} with application data, use the '$
     });
     const importBtn = document.createElement("button");
     importBtn.className = "btn btn--primary";
-    importBtn.textContent = "Import CSV";
-    importBtn.addEventListener("click", async () => {
-      const csv = await window.api.openCsvFile();
-      if (!csv) return;
-      const imported = parseLootCsv(csv);
-      if (imported.length === 0) return;
-      const existing = lootStore.getAll();
-      const existingKeys = new Set(
-        existing.map((e) => `${e.date}|${e.player}|${e.item}|${e.itemId ?? ""}`)
-      );
-      const newEntries = imported.filter(
-        (e) => !existingKeys.has(`${e.date}|${e.player}|${e.item}|${e.itemId ?? ""}`)
-      );
-      if (newEntries.length === 0) {
-        alert("No new entries to import (all duplicates).");
-        return;
-      }
-      const merged = [...existing, ...newEntries];
-      lootStore.replaceAll(merged);
-      gridApi?.setGridOption("rowData", merged);
+    importBtn.textContent = "Import data";
+    importBtn.addEventListener("click", () => {
+      showCsvPasteModal((csv) => {
+        const imported = parseLootCsv(csv);
+        if (imported.length === 0) return;
+        const existing = lootStore.getAll();
+        const existingKeys = new Set(
+          existing.map((e) => `${e.date}|${e.player}|${e.item}|${e.itemId ?? ""}`)
+        );
+        const newEntries = imported.filter(
+          (e) => !existingKeys.has(`${e.date}|${e.player}|${e.item}|${e.itemId ?? ""}`)
+        );
+        if (newEntries.length === 0) {
+          alert("No new entries to import (all duplicates).");
+          return;
+        }
+        showImportModal(newEntries);
+      });
     });
     const saveBtn = document.createElement("button");
     saveBtn.className = "btn btn--primary";
@@ -58765,12 +59041,14 @@ If you are trying to annotate ${containerName} with application data, use the '$
       saveBtn.textContent = "Saving...";
       try {
         const entries = lootStore.getAll();
-        const header = ["Date", "Player", "Item", "ItemID"];
+        const header = ["Date", "Player", "Item", "ItemID", "OS?", "Deducted"];
         const rows = entries.map((e) => [
           e.date,
           e.player,
           e.item,
-          e.itemId != null ? String(e.itemId) : ""
+          e.itemId != null ? String(e.itemId) : "",
+          String(e.os),
+          e.deducted
         ]);
         await window.api.writeSheet("loothistory", [header, ...rows]);
         saveBtn.textContent = "Saved!";
@@ -58842,59 +59120,6 @@ If you are trying to annotate ${containerName} with application data, use the '$
     });
     return page;
   }
-
-  // src/renderer/store/RosterStore.ts
-  var STORAGE_KEY2 = "fta-roster";
-  var RosterStore = class {
-    entries = [];
-    listeners = /* @__PURE__ */ new Set();
-    constructor() {
-      this.load();
-    }
-    getAll() {
-      return [...this.entries];
-    }
-    add(entry) {
-      this.entries.push(entry);
-      this.persist();
-      this.notify();
-    }
-    remove(entries) {
-      const toRemove = new Set(entries);
-      this.entries = this.entries.filter((e) => !toRemove.has(e));
-      this.persist();
-      this.notify();
-    }
-    replaceAll(entries) {
-      this.entries = entries;
-      this.persist();
-      this.notify();
-    }
-    subscribe(listener) {
-      this.listeners.add(listener);
-      return () => this.listeners.delete(listener);
-    }
-    notify() {
-      this.listeners.forEach((fn) => fn());
-    }
-    persist() {
-      try {
-        localStorage.setItem(STORAGE_KEY2, JSON.stringify(this.entries));
-      } catch {
-      }
-    }
-    load() {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY2);
-        if (raw) {
-          this.entries = JSON.parse(raw);
-        }
-      } catch {
-        this.entries = [];
-      }
-    }
-  };
-  var rosterStore = new RosterStore();
 
   // src/renderer/components/pages/RosterPage.ts
   ModuleRegistry.registerModules([AllCommunityModule]);
@@ -59169,7 +59394,7 @@ If you are trying to annotate ${containerName} with application data, use the '$
   }
 
   // src/renderer/store/AttendanceStore.ts
-  var STORAGE_KEY3 = "fta-attendance";
+  var STORAGE_KEY4 = "fta-attendance";
   var AttendanceStore = class {
     entries = [];
     listeners = /* @__PURE__ */ new Set();
@@ -59198,13 +59423,13 @@ If you are trying to annotate ${containerName} with application data, use the '$
     }
     persist() {
       try {
-        localStorage.setItem(STORAGE_KEY3, JSON.stringify(this.entries));
+        localStorage.setItem(STORAGE_KEY4, JSON.stringify(this.entries));
       } catch {
       }
     }
     load() {
       try {
-        const raw = localStorage.getItem(STORAGE_KEY3);
+        const raw = localStorage.getItem(STORAGE_KEY4);
         if (raw) {
           this.entries = JSON.parse(raw);
         }
@@ -59217,7 +59442,7 @@ If you are trying to annotate ${containerName} with application data, use the '$
 
   // src/renderer/components/pages/AttendancePage.ts
   var ROSTER_SHEET = "roster";
-  var ROSTER_HEADERS = ["Name", "Raid-Helper name", "Rank", "Class", "MS", "OS", "Main", "Profession 1", "Profession 2", "Roll Modifier", "Notes"];
+  var ROSTER_HEADERS2 = ["Name", "Raid-Helper name", "Rank", "Class", "MS", "OS", "Main", "Profession 1", "Profession 2", "Roll Modifier", "Notes"];
   var ATTENDANCE_SHEET = "attendance";
   var ATTENDANCE_HEADERS = ["Date", "Event Name", "Link", "Roster"];
   function findRosterName(signUpName) {
@@ -59351,7 +59576,7 @@ If you are trying to annotate ${containerName} with application data, use the '$
       const pointsInput = document.createElement("input");
       pointsInput.type = "text";
       pointsInput.className = "attendance-points-input";
-      pointsInput.value = "0.2";
+      pointsInput.value = settingsStore.get("Award for raid completion") || "0.2";
       pointsInput.addEventListener("click", (e) => e.preventDefault());
       pointsWrap.appendChild(pointsInput);
       const awardWrap = document.createElement("span");
@@ -59460,7 +59685,7 @@ If you are trying to annotate ${containerName} with application data, use the '$
       e.rollModifier,
       e.notes
     ]);
-    await window.api.writeSheet(ROSTER_SHEET, [ROSTER_HEADERS, ...rosterRows]);
+    await window.api.writeSheet(ROSTER_SHEET, [ROSTER_HEADERS2, ...rosterRows]);
     const link = `https://raid-helper.dev/event/${eventId}`;
     const attendanceEntry = {
       date: event.date,
@@ -59566,12 +59791,42 @@ If you are trying to annotate ${containerName} with application data, use the '$
   }
 
   // src/renderer/components/pages/SettingsPage.ts
+  var SETTINGS_SHEET = "settings";
+  var SETTINGS_HEADERS = ["Key", "Value"];
+  function createNumberField(labelText, tooltip) {
+    const label = document.createElement("label");
+    label.className = "settings-label";
+    label.textContent = labelText;
+    const input = document.createElement("input");
+    input.type = "number";
+    input.step = "0.01";
+    input.className = "settings-input";
+    input.placeholder = tooltip;
+    input.title = tooltip;
+    return { label, input };
+  }
   function createSettingsPage() {
     const page = document.createElement("div");
     page.className = "page settings-page";
     const heading = document.createElement("h2");
     heading.textContent = "Settings";
     page.appendChild(heading);
+    const saveBtn = document.createElement("button");
+    saveBtn.className = "btn btn--primary";
+    saveBtn.textContent = "Save";
+    const status = document.createElement("span");
+    status.className = "settings-status";
+    const topActions = document.createElement("div");
+    topActions.className = "settings-actions";
+    topActions.appendChild(saveBtn);
+    topActions.appendChild(status);
+    page.appendChild(topActions);
+    const connSection = document.createElement("div");
+    connSection.className = "settings-section";
+    const connHeading = document.createElement("h3");
+    connHeading.className = "settings-section-title";
+    connHeading.textContent = "Connection";
+    connSection.appendChild(connHeading);
     const form = document.createElement("div");
     form.className = "settings-form";
     const urlLabel = document.createElement("label");
@@ -59603,36 +59858,251 @@ If you are trying to annotate ${containerName} with application data, use the '$
     const hint = document.createElement("p");
     hint.className = "settings-hint";
     hint.textContent = 'Share the Google Sheet with the service account email address (found in the key file as "client_email").';
-    const saveBtn = document.createElement("button");
-    saveBtn.className = "btn btn--primary";
-    saveBtn.textContent = "Save";
-    const status = document.createElement("span");
-    status.className = "settings-status";
-    saveBtn.addEventListener("click", async () => {
-      await window.api.saveConfig({
-        googleSheetUrl: urlInput.value.trim(),
-        serviceAccountKeyPath: keyInput.value.trim()
-      });
-      status.textContent = "Saved!";
-      setTimeout(() => {
-        status.textContent = "";
-      }, 2e3);
-    });
-    window.api.loadConfig().then((config) => {
-      urlInput.value = config.googleSheetUrl;
-      keyInput.value = config.serviceAccountKeyPath;
-    });
     form.appendChild(urlLabel);
     form.appendChild(urlInput);
     form.appendChild(keyLabel);
     form.appendChild(keyRow);
     form.appendChild(hint);
+    connSection.appendChild(form);
+    page.appendChild(connSection);
+    const rollSection = document.createElement("div");
+    rollSection.className = "settings-section";
+    const rollHeading = document.createElement("h3");
+    rollHeading.className = "settings-section-title";
+    rollHeading.textContent = "Balanced Roll Settings";
+    rollSection.appendChild(rollHeading);
+    const rollForm = document.createElement("div");
+    rollForm.className = "settings-form";
+    const newMember = createNumberField("New member value", "1.0");
+    const awardCompletion = createNumberField("Award for raid completion", "0.2");
+    const deductionWin = createNumberField("Deduction on item win", "0.1");
+    rollForm.appendChild(newMember.label);
+    rollForm.appendChild(newMember.input);
+    rollForm.appendChild(awardCompletion.label);
+    rollForm.appendChild(awardCompletion.input);
+    rollForm.appendChild(deductionWin.label);
+    rollForm.appendChild(deductionWin.input);
+    rollSection.appendChild(rollForm);
+    page.appendChild(rollSection);
+    saveBtn.addEventListener("click", async () => {
+      saveBtn.disabled = true;
+      saveBtn.textContent = "Saving...";
+      try {
+        await window.api.saveConfig({
+          googleSheetUrl: urlInput.value.trim(),
+          serviceAccountKeyPath: keyInput.value.trim()
+        });
+        const entries = [
+          { key: "New member value", value: newMember.input.value.trim() },
+          { key: "Award for raid completion", value: awardCompletion.input.value.trim() },
+          { key: "Deduction on item win", value: deductionWin.input.value.trim() }
+        ];
+        settingsStore.replaceAll(entries);
+        const settingsRows = [
+          SETTINGS_HEADERS,
+          ...entries.map((e) => [e.key, e.value])
+        ];
+        await window.api.writeSheet(SETTINGS_SHEET, settingsRows);
+        status.textContent = "Saved!";
+        setTimeout(() => {
+          status.textContent = "";
+        }, 2e3);
+      } catch (err) {
+        status.textContent = `Failed to save: ${err instanceof Error ? err.message : err}`;
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Save";
+      }
+    });
+    window.api.loadConfig().then((config) => {
+      urlInput.value = config.googleSheetUrl;
+      keyInput.value = config.serviceAccountKeyPath;
+    });
+    function loadFromStore() {
+      newMember.input.value = settingsStore.get("New member value");
+      awardCompletion.input.value = settingsStore.get("Award for raid completion");
+      deductionWin.input.value = settingsStore.get("Deduction on item win");
+    }
+    loadFromStore();
+    settingsStore.subscribe(loadFromStore);
+    return page;
+  }
+
+  // src/renderer/components/pages/RaidPage.ts
+  function extractEventId2(input) {
+    const trimmed = input.trim();
+    const apiMatch = trimmed.match(/raid-helper\.dev\/api\/v2\/events\/(\d+)/);
+    if (apiMatch) return apiMatch[1];
+    const eventMatch = trimmed.match(/raid-helper\.dev\/event\/(\d+)/);
+    if (eventMatch) return eventMatch[1];
+    return null;
+  }
+  function showUrlPrompt2(onSubmit) {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    const modal = document.createElement("div");
+    modal.className = "modal";
+    const title = document.createElement("h3");
+    title.className = "modal__title";
+    title.textContent = "Load Raid Helper Event";
+    modal.appendChild(title);
+    const field = document.createElement("div");
+    field.className = "modal__field";
+    const label = document.createElement("label");
+    label.className = "modal__label";
+    label.textContent = "Raid Helper Event URL";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "modal__input";
+    input.placeholder = "https://raid-helper.dev/event/...";
+    const error = document.createElement("div");
+    error.className = "attendance-url-error";
+    error.style.display = "none";
+    error.textContent = "Invalid URL. Use a raid-helper.dev event or API URL.";
+    field.appendChild(label);
+    field.appendChild(input);
+    field.appendChild(error);
+    modal.appendChild(field);
     const actions = document.createElement("div");
-    actions.className = "settings-actions";
-    actions.appendChild(saveBtn);
-    actions.appendChild(status);
-    form.appendChild(actions);
-    page.appendChild(form);
+    actions.className = "modal__actions";
+    const submitBtn = document.createElement("button");
+    submitBtn.className = "btn btn--primary";
+    submitBtn.textContent = "Load Event";
+    submitBtn.addEventListener("click", () => {
+      const eventId = extractEventId2(input.value);
+      if (!eventId) {
+        error.style.display = "block";
+        input.focus();
+        return;
+      }
+      overlay.remove();
+      onSubmit(eventId);
+    });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") submitBtn.click();
+    });
+    const cancelBtn = document.createElement("button");
+    cancelBtn.className = "btn";
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.addEventListener("click", () => overlay.remove());
+    actions.appendChild(submitBtn);
+    actions.appendChild(cancelBtn);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+    document.body.appendChild(overlay);
+    input.focus();
+  }
+  function buildResultForm(matches) {
+    const container = document.createElement("div");
+    container.className = "raid-form";
+    const list = document.createElement("div");
+    list.className = "raid-list";
+    const listHeader = document.createElement("div");
+    listHeader.className = "raid-row raid-row--header";
+    listHeader.innerHTML = `<span class="raid-col raid-col--name">Name</span><span class="raid-col raid-col--rh-name">Raid-Helper Name</span><span class="raid-col raid-col--modifier">Roll Modifier</span><span class="raid-col raid-col--event-name">Event Sign-Up Name</span>`;
+    list.appendChild(listHeader);
+    for (const entry of matches) {
+      const row = document.createElement("div");
+      row.className = "raid-row";
+      if (!entry.name) row.classList.add("raid-row--unmatched");
+      const nameCol = document.createElement("span");
+      nameCol.className = "raid-col raid-col--name";
+      nameCol.textContent = entry.name || "\u2014";
+      const rhNameCol = document.createElement("span");
+      rhNameCol.className = "raid-col raid-col--rh-name";
+      rhNameCol.textContent = entry.raidHelperName || "\u2014";
+      const modCol = document.createElement("span");
+      modCol.className = "raid-col raid-col--modifier";
+      modCol.textContent = entry.rollModifier || "\u2014";
+      const eventNameCol = document.createElement("span");
+      eventNameCol.className = "raid-col raid-col--event-name";
+      eventNameCol.textContent = entry.eventName;
+      row.appendChild(nameCol);
+      row.appendChild(rhNameCol);
+      row.appendChild(modCol);
+      row.appendChild(eventNameCol);
+      list.appendChild(row);
+    }
+    container.appendChild(list);
+    const footer = document.createElement("div");
+    footer.className = "raid-footer";
+    const statusMsg = document.createElement("span");
+    statusMsg.className = "raid-status";
+    footer.appendChild(statusMsg);
+    const exportBtn = document.createElement("button");
+    exportBtn.className = "btn btn--primary";
+    exportBtn.textContent = "Export to clipboard";
+    exportBtn.addEventListener("click", async () => {
+      const data = matches.map((m) => ({
+        name: m.name,
+        raidHelperName: m.raidHelperName,
+        rollModifier: m.rollModifier,
+        eventName: m.eventName
+      }));
+      try {
+        await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+        statusMsg.textContent = "Copied to clipboard!";
+        statusMsg.className = "raid-status raid-status--success";
+        setTimeout(() => {
+          statusMsg.textContent = "";
+        }, 3e3);
+      } catch {
+        statusMsg.textContent = "Failed to copy to clipboard.";
+        statusMsg.className = "raid-status raid-status--error";
+      }
+    });
+    footer.appendChild(exportBtn);
+    container.appendChild(footer);
+    return container;
+  }
+  function createRaidPage() {
+    const page = document.createElement("div");
+    page.className = "page raid-page";
+    const toolbar = document.createElement("div");
+    toolbar.className = "loot-history-toolbar";
+    const exportBtn = document.createElement("button");
+    exportBtn.className = "btn btn--primary";
+    exportBtn.textContent = "Export Roll Modifiers";
+    toolbar.appendChild(exportBtn);
+    page.appendChild(toolbar);
+    const content = document.createElement("div");
+    content.className = "raid-content";
+    page.appendChild(content);
+    exportBtn.addEventListener("click", () => {
+      showUrlPrompt2(async (eventId) => {
+        content.innerHTML = "";
+        const spinner = document.createElement("div");
+        spinner.className = "attendance-loading";
+        spinner.innerHTML = '<div class="spinner"></div><span>Loading event data...</span>';
+        content.appendChild(spinner);
+        try {
+          const event = await window.api.fetchRaidHelperEvent(eventId);
+          const roster = rosterStore.getAll();
+          const signUps = event.signUps.filter((s) => s.className !== "Absence");
+          const matches = signUps.map((signUp) => {
+            const lower = signUp.name.toLowerCase();
+            const rosterEntry = roster.find((r) => r.raidHelperName.toLowerCase() === lower) ?? roster.find((r) => r.name.toLowerCase() === lower);
+            return {
+              name: rosterEntry?.name ?? "",
+              raidHelperName: rosterEntry?.raidHelperName ?? "",
+              rollModifier: rosterEntry?.rollModifier ?? "",
+              eventName: signUp.name
+            };
+          });
+          content.innerHTML = "";
+          content.appendChild(buildResultForm(matches));
+        } catch (err) {
+          content.innerHTML = "";
+          const errEl = document.createElement("div");
+          errEl.className = "attendance-error";
+          errEl.textContent = `Failed to load event: ${err instanceof Error ? err.message : err}`;
+          content.appendChild(errEl);
+        }
+      });
+    });
     return page;
   }
 
@@ -59641,6 +60111,7 @@ If you are trying to annotate ${containerName} with application data, use the '$
     "#loot-history": createLootHistoryPage,
     "#roster": createRosterPage,
     "#attendance": createAttendancePage,
+    "#raid": createRaidPage,
     "#settings": createSettingsPage
   };
   var main;
@@ -59650,7 +60121,9 @@ If you are trying to annotate ${containerName} with application data, use the '$
       date: row[0]?.trim() ?? "",
       player: row[1]?.trim() ?? "",
       item: row[2]?.trim() ?? "",
-      itemId: row[3] ? parseInt(row[3].trim(), 10) || null : null
+      itemId: row[3] ? parseInt(row[3].trim(), 10) || null : null,
+      os: (row[4]?.trim() ?? "").toLowerCase() === "true",
+      deducted: row[5]?.trim() ?? ""
     }));
   }
   function parseRosterRows(rows) {
@@ -59667,6 +60140,13 @@ If you are trying to annotate ${containerName} with application data, use the '$
       profession2: row[8]?.trim() ?? "",
       rollModifier: row[9]?.trim() ?? "",
       notes: row[10]?.trim() ?? ""
+    }));
+  }
+  function parseSettingsRows(rows) {
+    if (rows.length < 2) return [];
+    return rows.slice(1).map((row) => ({
+      key: row[0]?.trim() ?? "",
+      value: row[1]?.trim() ?? ""
     }));
   }
   function parseAttendanceRows(rows) {
@@ -59703,6 +60183,13 @@ If you are trying to annotate ${containerName} with application data, use the '$
         }).catch((err) => console.error("Preload attendance failed:", err))
       );
     }
+    if (settingsStore.getAll().length === 0) {
+      fetches.push(
+        window.api.fetchSheet("settings").then((rows) => {
+          settingsStore.replaceAll(parseSettingsRows(rows));
+        }).catch((err) => console.error("Preload settings failed:", err))
+      );
+    }
     await Promise.all(fetches);
   }
   function navigateTo(hash) {
@@ -59721,7 +60208,7 @@ If you are trying to annotate ${containerName} with application data, use the '$
     banner.alt = "From the Ashes";
     const version = document.createElement("span");
     version.className = "app-version";
-    version.textContent = "v1.1.0";
+    version.textContent = "v1.2.0";
     bannerWrap.appendChild(banner);
     bannerWrap.appendChild(version);
     body.appendChild(bannerWrap);

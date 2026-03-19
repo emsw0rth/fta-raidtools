@@ -5,6 +5,7 @@ const navItems: NavLinkOptions[] = [
   { label: "Loot History", href: "#loot-history", active: true },
   { label: "Roster", href: "#roster" },
   { label: "Attendance", href: "#attendance" },
+  { label: "Raid", href: "#raid" },
   { label: "Settings", href: "#settings" },
 ];
 

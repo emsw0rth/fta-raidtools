@@ -3,4 +3,6 @@ export interface LootEntry {
   player: string;
   item: string;
   itemId: number | null;
+  os: boolean;
+  deducted: string;
 }

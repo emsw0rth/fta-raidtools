@@ -1,9 +1,13 @@
 import { createGrid, GridApi, GridOptions, ColDef, AllCommunityModule, ModuleRegistry, themeAlpine, colorSchemeDark, CellValueChangedEvent, CellMouseOverEvent, CellMouseOutEvent } from "ag-grid-community";
 import { LootEntry } from "../../models/LootEntry";
 import { lootStore } from "../../store/LootStore";
+import { rosterStore } from "../../store/RosterStore";
+import { settingsStore } from "../../store/SettingsStore";
 import { parseLootCsv } from "../../services/csvParser";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
+
+const ROSTER_HEADERS = ["Name", "Raid-Helper name", "Rank", "Class", "MS", "OS", "Main", "Profession 1", "Profession 2", "Roll Modifier", "Notes"];
 
 const tooltipCache = new Map<number, { name: string; quality: number; icon: string; tooltip: string }>();
 let tooltipEl: HTMLDivElement | null = null;
@@ -72,6 +76,8 @@ const columnDefs: ColDef<LootEntry>[] = [
   { field: "date", headerName: "Date", width: 180 },
   { field: "player", headerName: "Player", width: 160 },
   { field: "item", headerName: "Item", flex: 1, minWidth: 200 },
+  { field: "os", headerName: "OS?", width: 80 },
+  { field: "deducted", headerName: "Deducted", width: 100 },
 ];
 
 let gridApi: GridApi<LootEntry> | null = null;
@@ -91,6 +97,8 @@ function parseSheetRows(rows: string[][]): LootEntry[] {
     player: row[1]?.trim() ?? "",
     item: row[2]?.trim() ?? "",
     itemId: row[3] ? parseInt(row[3].trim(), 10) || null : null,
+    os: (row[4]?.trim() ?? "").toLowerCase() === "true",
+    deducted: row[5]?.trim() ?? "",
   }));
 }
 
@@ -124,6 +132,211 @@ async function loadFromSheet(silent = false): Promise<void> {
   }
 }
 
+function showCsvPasteModal(onSubmit: (csv: string) => void): void {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+
+  const modal = document.createElement("div");
+  modal.className = "modal import-modal";
+
+  const title = document.createElement("h3");
+  title.className = "modal__title";
+  title.textContent = "Import data";
+  modal.appendChild(title);
+
+  const hint = document.createElement("p");
+  hint.className = "settings-hint";
+  hint.textContent = "Paste CSV data below (including header row).";
+  modal.appendChild(hint);
+
+  const textarea = document.createElement("textarea");
+  textarea.className = "csv-paste-input";
+  textarea.placeholder = "Date,Player,Item,ItemID\n...";
+  textarea.rows = 12;
+  modal.appendChild(textarea);
+
+  const actions = document.createElement("div");
+  actions.className = "modal__actions modal__actions--right";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "btn";
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.addEventListener("click", () => overlay.remove());
+
+  const importBtn = document.createElement("button");
+  importBtn.className = "btn btn--primary";
+  importBtn.textContent = "Import";
+  importBtn.addEventListener("click", () => {
+    const csv = textarea.value.trim();
+    if (!csv) return;
+    overlay.remove();
+    onSubmit(csv);
+  });
+
+  actions.appendChild(cancelBtn);
+  actions.appendChild(importBtn);
+  modal.appendChild(actions);
+
+  overlay.appendChild(modal);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+
+  document.body.appendChild(overlay);
+  textarea.focus();
+}
+
+function showImportModal(entries: LootEntry[]): void {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+
+  const modal = document.createElement("div");
+  modal.className = "modal import-modal";
+
+  const title = document.createElement("h3");
+  title.className = "modal__title";
+  title.textContent = "Verify Import";
+  modal.appendChild(title);
+
+  const list = document.createElement("div");
+  list.className = "import-list";
+
+  const listHeader = document.createElement("div");
+  listHeader.className = "import-row import-row--header";
+  listHeader.innerHTML =
+    `<span class="import-col import-col--date">Date</span>` +
+    `<span class="import-col import-col--player">Player</span>` +
+    `<span class="import-col import-col--item">Item</span>` +
+    `<span class="import-col import-col--os">OS?</span>`;
+  list.appendChild(listHeader);
+
+  const checkboxes: HTMLInputElement[] = [];
+
+  for (const entry of entries) {
+    const row = document.createElement("div");
+    row.className = "import-row";
+
+    const dateCol = document.createElement("span");
+    dateCol.className = "import-col import-col--date";
+    dateCol.textContent = entry.date;
+
+    const playerCol = document.createElement("span");
+    playerCol.className = "import-col import-col--player";
+    playerCol.textContent = entry.player;
+
+    const itemCol = document.createElement("span");
+    itemCol.className = "import-col import-col--item";
+    itemCol.textContent = entry.item;
+
+    const osCol = document.createElement("span");
+    osCol.className = "import-col import-col--os";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "import-os-checkbox";
+    checkboxes.push(checkbox);
+    osCol.appendChild(checkbox);
+
+    row.appendChild(dateCol);
+    row.appendChild(playerCol);
+    row.appendChild(itemCol);
+    row.appendChild(osCol);
+    list.appendChild(row);
+  }
+
+  modal.appendChild(list);
+
+  const actions = document.createElement("div");
+  actions.className = "modal__actions modal__actions--right";
+
+  const verifyBtn = document.createElement("button");
+  verifyBtn.className = "btn btn--primary";
+  verifyBtn.textContent = "Verify and import";
+  verifyBtn.addEventListener("click", async () => {
+    verifyBtn.disabled = true;
+    verifyBtn.textContent = "Importing...";
+
+    const deductionSetting = parseFloat(settingsStore.get("Deduction on item win")) || 0.1;
+
+    // Deduct roll modifier for non-OS entries and populate os/deducted fields
+    const roster = rosterStore.getAll();
+    const rosterByName = new Map<string, typeof roster[0]>();
+    for (const r of roster) {
+      rosterByName.set(r.name.toLowerCase(), r);
+    }
+
+    let rosterChanged = false;
+
+    for (let i = 0; i < entries.length; i++) {
+      const isOs = checkboxes[i].checked;
+      entries[i].os = isOs;
+
+      if (isOs) {
+        entries[i].deducted = "";
+        continue;
+      }
+
+      const playerName = entries[i].player.trim().toLowerCase();
+      const rosterEntry = rosterByName.get(playerName);
+      if (!rosterEntry) {
+        entries[i].deducted = "";
+        continue;
+      }
+
+      const current = parseFloat(rosterEntry.rollModifier) || 1;
+      rosterEntry.rollModifier = String(parseFloat((current - deductionSetting).toFixed(4)));
+      entries[i].deducted = String(deductionSetting);
+      rosterChanged = true;
+    }
+
+    // Import loot entries to store
+    const existing = lootStore.getAll();
+    const merged = [...existing, ...entries];
+    lootStore.replaceAll(merged);
+    gridApi?.setGridOption("rowData", merged);
+
+    // Persist loot history to sheet
+    try {
+      const lootHeader = ["Date", "Player", "Item", "ItemID", "OS?", "Deducted"];
+      const lootRows = merged.map((e) => [
+        e.date, e.player, e.item, e.itemId != null ? String(e.itemId) : "", String(e.os), e.deducted,
+      ]);
+      await window.api.writeSheet("loothistory", [lootHeader, ...lootRows]);
+    } catch (err) {
+      alert(`Loot imported but failed to save loot history: ${err instanceof Error ? err.message : err}`);
+    }
+
+    if (rosterChanged) {
+      rosterStore.replaceAll(roster);
+      try {
+        const rosterRows = roster.map((e) => [
+          e.name, e.raidHelperName, e.rank, e.class, e.ms, e.os, e.main, e.profession1, e.profession2, e.rollModifier, e.notes,
+        ]);
+        await window.api.writeSheet("roster", [ROSTER_HEADERS, ...rosterRows]);
+      } catch (err) {
+        alert(`Loot imported but failed to save roster: ${err instanceof Error ? err.message : err}`);
+      }
+    }
+
+    overlay.remove();
+  });
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "btn";
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.addEventListener("click", () => overlay.remove());
+
+  actions.appendChild(cancelBtn);
+  actions.appendChild(verifyBtn);
+  modal.appendChild(actions);
+
+  overlay.appendChild(modal);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+
+  document.body.appendChild(overlay);
+}
+
 export function createLootHistoryPage(): HTMLElement {
   const page = document.createElement("div");
   page.className = "page loot-history-page";
@@ -147,7 +360,7 @@ export function createLootHistoryPage(): HTMLElement {
   addBtn.className = "btn btn--primary";
   addBtn.textContent = "Add Row";
   addBtn.addEventListener("click", () => {
-    const newEntry: LootEntry = { date: "", player: "", item: "", itemId: null };
+    const newEntry: LootEntry = { date: "", player: "", item: "", itemId: null, os: false, deducted: "" };
     gridApi?.applyTransaction({ add: [newEntry] });
     syncToStore();
   });
@@ -165,29 +378,27 @@ export function createLootHistoryPage(): HTMLElement {
 
   const importBtn = document.createElement("button");
   importBtn.className = "btn btn--primary";
-  importBtn.textContent = "Import CSV";
-  importBtn.addEventListener("click", async () => {
-    const csv = await window.api.openCsvFile();
-    if (!csv) return;
-    const imported = parseLootCsv(csv);
-    if (imported.length === 0) return;
+  importBtn.textContent = "Import data";
+  importBtn.addEventListener("click", () => {
+    showCsvPasteModal((csv) => {
+      const imported = parseLootCsv(csv);
+      if (imported.length === 0) return;
 
-    const existing = lootStore.getAll();
-    const existingKeys = new Set(
-      existing.map((e) => `${e.date}|${e.player}|${e.item}|${e.itemId ?? ""}`),
-    );
-    const newEntries = imported.filter(
-      (e) => !existingKeys.has(`${e.date}|${e.player}|${e.item}|${e.itemId ?? ""}`),
-    );
+      const existing = lootStore.getAll();
+      const existingKeys = new Set(
+        existing.map((e) => `${e.date}|${e.player}|${e.item}|${e.itemId ?? ""}`),
+      );
+      const newEntries = imported.filter(
+        (e) => !existingKeys.has(`${e.date}|${e.player}|${e.item}|${e.itemId ?? ""}`),
+      );
 
-    if (newEntries.length === 0) {
-      alert("No new entries to import (all duplicates).");
-      return;
-    }
+      if (newEntries.length === 0) {
+        alert("No new entries to import (all duplicates).");
+        return;
+      }
 
-    const merged = [...existing, ...newEntries];
-    lootStore.replaceAll(merged);
-    gridApi?.setGridOption("rowData", merged);
+      showImportModal(newEntries);
+    });
   });
 
   const saveBtn = document.createElement("button");
@@ -204,12 +415,14 @@ export function createLootHistoryPage(): HTMLElement {
     saveBtn.textContent = "Saving...";
     try {
       const entries = lootStore.getAll();
-      const header = ["Date", "Player", "Item", "ItemID"];
+      const header = ["Date", "Player", "Item", "ItemID", "OS?", "Deducted"];
       const rows = entries.map((e) => [
         e.date,
         e.player,
         e.item,
         e.itemId != null ? String(e.itemId) : "",
+        String(e.os),
+        e.deducted,
       ]);
       await window.api.writeSheet("loothistory", [header, ...rows]);
       saveBtn.textContent = "Saved!";

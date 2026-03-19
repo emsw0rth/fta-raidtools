@@ -2,6 +2,7 @@ import { RosterEntry } from "../../models/RosterEntry";
 import { AttendanceEntry } from "../../models/AttendanceEntry";
 import { rosterStore } from "../../store/RosterStore";
 import { attendanceStore } from "../../store/AttendanceStore";
+import { settingsStore } from "../../store/SettingsStore";
 
 const ROSTER_SHEET = "roster";
 const ROSTER_HEADERS = ["Name", "Raid-Helper name", "Rank", "Class", "MS", "OS", "Main", "Profession 1", "Profession 2", "Roll Modifier", "Notes"];
@@ -188,7 +189,7 @@ function buildAttendanceForm(event: RaidHelperEvent, eventId: string): HTMLEleme
     const pointsInput = document.createElement("input");
     pointsInput.type = "text";
     pointsInput.className = "attendance-points-input";
-    pointsInput.value = "0.2";
+    pointsInput.value = settingsStore.get("Award for raid completion") || "0.2";
     pointsInput.addEventListener("click", (e) => e.preventDefault());
     pointsWrap.appendChild(pointsInput);
 

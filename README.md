@@ -8,7 +8,9 @@ A desktop application for the World of Warcraft TBC Anniversary guild **From the
 - View and edit loot history in a sortable, filterable data grid
 - Load loot data from a Google Sheet (tab: `loothistory`)
 - Save changes back to the Google Sheet
-- Import loot entries from CSV files with automatic duplicate detection
+- Import loot entries by pasting CSV data, with automatic duplicate detection
+- OS? tracking per item — off-spec wins skip roll modifier deductions
+- Deducted column shows the roll modifier cost applied for each win
 - Hover over item names to see Wowhead tooltips with item icon, stats, and details
 
 ### Guild Roster
@@ -20,15 +22,24 @@ A desktop application for the World of Warcraft TBC Anniversary guild **From the
 ### Attendance
 - Load event data from Raid Helper by pasting an event URL
 - Review sign-ups with role, class, and spec information
-- Set award values per attendee (default 0.2)
+- Award values default to the "Award for raid completion" setting
 - Map sign-ups to roster names via the "Award to" column
 - Confirm & Award to apply roll modifier bonuses and save to the roster sheet
 - Attendance history saved to the `attendance` sheet tab with full event data
 - View previous events with clickable Raid Helper links
 
+### Raid
+- Export roll modifiers for a Raid Helper event
+- Load event sign-ups and match them against the guild roster
+- View Name, Raid-Helper Name, Roll Modifier, and Event Sign-Up Name
+- Unmatched entries highlighted for easy identification
+- "Export to clipboard" copies data as JSON for addon use
+
 ### Settings
 - Configure the Google Sheet URL
 - Select a Google Cloud service account key file for authentication
+- **Balanced Roll settings**: New member value, Award for raid completion, Deduction on item win
+- Settings stored in the `settings` sheet tab and preloaded on app start
 
 ### Auto-Update
 - The app checks for new releases on GitHub at startup
@@ -56,8 +67,8 @@ The app uses a Google Cloud service account to read and write sheet data. To set
 The Google Sheet should have the following tabs:
 
 **`loothistory`** — columns:
-| Date | Player | Item | ItemID |
-|------|--------|------|--------|
+| Date | Player | Item | ItemID | OS? | Deducted |
+|------|--------|------|--------|-----|----------|
 
 **`roster`** — columns:
 | Name | Raid-Helper name | Rank | Class | MS | OS | Main | Profession 1 | Profession 2 | Roll Modifier | Notes |
@@ -67,7 +78,11 @@ The Google Sheet should have the following tabs:
 | Date | Event Name | Link | Roster |
 |------|------------|------|--------|
 
-The `Roster` column stores a JSON string with the full Raid Helper event data.
+**`settings`** — columns:
+| Key | Value |
+|-----|-------|
+
+The `Roster` column in the attendance tab stores a JSON string with the full Raid Helper event data.
 
 ## Development
 

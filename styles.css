@@ -172,9 +172,25 @@ main {
 }
 
 /* Settings Page */
+.settings-page {
+  overflow-y: auto;
+}
+
 .settings-page h2 {
   margin-bottom: 1.5rem;
   color: #d4a535;
+}
+
+.settings-section {
+  margin-top: 1.5rem;
+}
+
+.settings-section-title {
+  color: #c4a878;
+  font-size: 1rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid #5c3a10;
+  padding-bottom: 0.4rem;
 }
 
 .settings-form {
@@ -607,4 +623,176 @@ main {
 
 .attendance-history-col--link a:hover {
   text-decoration: underline;
+}
+
+/* Raid Page */
+.raid-page {
+  overflow-y: auto;
+}
+
+.raid-content {
+  margin-top: 1rem;
+}
+
+.raid-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.raid-list {
+  border: 1px solid #5c3a10;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.raid-row {
+  display: flex;
+  align-items: center;
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid rgba(92, 58, 16, 0.4);
+}
+
+.raid-row:last-child {
+  border-bottom: none;
+}
+
+.raid-row:not(.raid-row--header):hover {
+  background-color: rgba(212, 165, 53, 0.06);
+}
+
+.raid-row--header {
+  background-color: #1a1008;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: #c4a878;
+}
+
+.raid-row--unmatched {
+  background-color: rgba(180, 50, 50, 0.12);
+}
+
+.raid-col {
+  flex: 1;
+  min-width: 100px;
+}
+
+.raid-col--name {
+  flex: 1.5;
+  min-width: 120px;
+}
+
+.raid-col--modifier {
+  flex: 0.8;
+  min-width: 80px;
+  text-align: center;
+}
+
+.raid-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid #5c3a10;
+}
+
+.raid-status {
+  font-size: 0.85rem;
+}
+
+.raid-status--success {
+  color: #6abf69;
+}
+
+.raid-status--error {
+  color: #c44;
+}
+
+/* Import CSV Modal */
+.import-modal {
+  width: 700px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.import-list {
+  border: 1px solid #5c3a10;
+  border-radius: 4px;
+  overflow-y: auto;
+  max-height: 55vh;
+}
+
+.import-row {
+  display: flex;
+  align-items: center;
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid rgba(92, 58, 16, 0.4);
+}
+
+.import-row:last-child {
+  border-bottom: none;
+}
+
+.import-row:not(.import-row--header):hover {
+  background-color: rgba(212, 165, 53, 0.06);
+}
+
+.import-row--header {
+  background-color: #1a1008;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: #c4a878;
+  position: sticky;
+  top: 0;
+}
+
+.import-col--date {
+  width: 160px;
+  flex-shrink: 0;
+}
+
+.import-col--player {
+  width: 130px;
+  flex-shrink: 0;
+}
+
+.import-col--item {
+  flex: 1;
+  min-width: 150px;
+}
+
+.import-col--os {
+  width: 50px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.import-os-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #d4a535;
+  cursor: pointer;
+}
+
+.modal__actions--right {
+  justify-content: flex-end;
+}
+
+.csv-paste-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #5c3a10;
+  border-radius: 4px;
+  background-color: #1a1008;
+  color: #e8d5b5;
+  font-size: 0.85rem;
+  font-family: monospace;
+  resize: vertical;
+  outline: none;
+}
+
+.csv-paste-input:focus {
+  border-color: #d4a535;
 }

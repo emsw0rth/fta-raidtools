@@ -13,6 +13,8 @@ export function parseLootCsv(csv: string): LootEntry[] {
       player: fields[1]?.trim() ?? "",
       item: fields[2]?.trim() ?? "",
       itemId: fields[3] ? parseInt(fields[3].trim(), 10) || null : null,
+      os: false,
+      deducted: "",
     };
   });
 }

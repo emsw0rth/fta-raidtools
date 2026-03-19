@@ -3,12 +3,15 @@ import { createLootHistoryPage } from "./components/pages/LootHistoryPage";
 import { createRosterPage } from "./components/pages/RosterPage";
 import { createAttendancePage } from "./components/pages/AttendancePage";
 import { createSettingsPage } from "./components/pages/SettingsPage";
+import { createRaidPage } from "./components/pages/RaidPage";
 import { lootStore } from "./store/LootStore";
 import { rosterStore } from "./store/RosterStore";
 import { attendanceStore } from "./store/AttendanceStore";
+import { settingsStore } from "./store/SettingsStore";
 import { LootEntry } from "./models/LootEntry";
 import { RosterEntry } from "./models/RosterEntry";
 import { AttendanceEntry } from "./models/AttendanceEntry";
+import { SettingsEntry } from "./models/SettingsEntry";
 
 type PageFactory = () => HTMLElement;
 
@@ -16,6 +19,7 @@ const pages: Record<string, PageFactory> = {
   "#loot-history": createLootHistoryPage,
   "#roster": createRosterPage,
   "#attendance": createAttendancePage,
+  "#raid": createRaidPage,
   "#settings": createSettingsPage,
 };
 
@@ -28,6 +32,8 @@ function parseLootRows(rows: string[][]): LootEntry[] {
     player: row[1]?.trim() ?? "",
     item: row[2]?.trim() ?? "",
     itemId: row[3] ? parseInt(row[3].trim(), 10) || null : null,
+    os: (row[4]?.trim() ?? "").toLowerCase() === "true",
+    deducted: row[5]?.trim() ?? "",
   }));
 }
 
@@ -45,6 +51,14 @@ function parseRosterRows(rows: string[][]): RosterEntry[] {
     profession2: row[8]?.trim() ?? "",
     rollModifier: row[9]?.trim() ?? "",
     notes: row[10]?.trim() ?? "",
+  }));
+}
+
+function parseSettingsRows(rows: string[][]): SettingsEntry[] {
+  if (rows.length < 2) return [];
+  return rows.slice(1).map((row) => ({
+    key: row[0]?.trim() ?? "",
+    value: row[1]?.trim() ?? "",
   }));
 }
 
@@ -88,6 +102,14 @@ async function preloadSheetData(): Promise<void> {
     );
   }
 
+  if (settingsStore.getAll().length === 0) {
+    fetches.push(
+      window.api.fetchSheet("settings").then((rows) => {
+        settingsStore.replaceAll(parseSettingsRows(rows));
+      }).catch((err) => console.error("Preload settings failed:", err))
+    );
+  }
+
   await Promise.all(fetches);
 }
 
@@ -111,7 +133,7 @@ function init(): void {
 
   const version = document.createElement("span");
   version.className = "app-version";
-  version.textContent = "v1.1.0";
+  version.textContent = "v1.2.0";
 
   bannerWrap.appendChild(banner);
   bannerWrap.appendChild(version);
