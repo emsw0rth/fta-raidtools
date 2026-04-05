@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FTA Raid Tools - User Guide</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #0d0a07;
+      color: #e8d5b5;
+      line-height: 1.7;
+    }
+
+    a { color: #d4a535; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Header */
+    .hero {
+      background: linear-gradient(180deg, #1a1008 0%, #0d0a07 100%);
+      border-bottom: 2px solid #5c3a10;
+      text-align: center;
+      padding: 3rem 2rem 2rem;
+    }
+
+    .hero h1 {
+      color: #d4a535;
+      font-size: 2.4rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .hero p {
+      color: #a08a6a;
+      font-size: 1.1rem;
+    }
+
+    /* Layout */
+    .container {
+      display: flex;
+      max-width: 1200px;
+      margin: 0 auto;
+      min-height: calc(100vh - 140px);
+    }
+
+    /* Sidebar nav */
+    .sidebar {
+      width: 240px;
+      flex-shrink: 0;
+      background-color: #1a1008;
+      border-right: 1px solid #5c3a10;
+      padding: 1.5rem 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    .sidebar h3 {
+      color: #c4a878;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 0.5rem 1.25rem;
+      margin-top: 0.75rem;
+    }
+
+    .sidebar h3:first-child { margin-top: 0; }
+
+    .sidebar a {
+      display: block;
+      padding: 0.4rem 1.25rem;
+      color: #a08a6a;
+      font-size: 0.9rem;
+      transition: color 0.15s, background-color 0.15s;
+    }
+
+    .sidebar a:hover {
+      color: #e8d5b5;
+      background-color: rgba(212, 165, 53, 0.1);
+      text-decoration: none;
+    }
+
+    /* Content */
+    .content {
+      flex: 1;
+      padding: 2.5rem 3rem;
+      max-width: 900px;
+    }
+
+    .content h2 {
+      color: #d4a535;
+      font-size: 1.6rem;
+      margin-top: 3rem;
+      margin-bottom: 1rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid #5c3a10;
+    }
+
+    .content h2:first-child { margin-top: 0; }
+
+    .content h3 {
+      color: #c4a878;
+      font-size: 1.15rem;
+      margin-top: 2rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .content p {
+      margin-bottom: 1rem;
+      color: #cbb99a;
+    }
+
+    .content ul, .content ol {
+      margin-bottom: 1rem;
+      padding-left: 1.5rem;
+    }
+
+    .content li {
+      margin-bottom: 0.4rem;
+      color: #cbb99a;
+    }
+
+    .content li strong { color: #e8d5b5; }
+
+    /* Screenshots */
+    .screenshot {
+      margin: 1.25rem 0 1.75rem;
+      border: 1px solid #5c3a10;
+      border-radius: 6px;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .screenshot img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .screenshot figcaption {
+      background-color: #1a1008;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8rem;
+      color: #a08a6a;
+      border-top: 1px solid #5c3a10;
+    }
+
+    /* Inline screenshots (modals) - smaller */
+    .screenshot--modal {
+      max-width: 480px;
+    }
+
+    /* Tips / notes */
+    .tip {
+      background-color: rgba(212, 165, 53, 0.08);
+      border-left: 3px solid #d4a535;
+      padding: 0.75rem 1rem;
+      margin: 1rem 0 1.25rem;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.9rem;
+    }
+
+    .tip strong {
+      color: #d4a535;
+    }
+
+    /* CSV example */
+    .code-block {
+      background-color: #1a1008;
+      border: 1px solid #5c3a10;
+      border-radius: 4px;
+      padding: 0.75rem 1rem;
+      font-family: "Cascadia Code", "Fira Code", monospace;
+      font-size: 0.82rem;
+      overflow-x: auto;
+      margin: 0.75rem 0 1.25rem;
+      color: #e8d5b5;
+      white-space: pre;
+    }
+
+    /* Field description table */
+    .field-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0.75rem 0 1.25rem;
+    }
+
+    .field-table th {
+      text-align: left;
+      color: #c4a878;
+      font-size: 0.8rem;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid #5c3a10;
+      background-color: #1a1008;
+    }
+
+    .field-table td {
+      padding: 0.45rem 0.75rem;
+      border-bottom: 1px solid rgba(92, 58, 16, 0.3);
+      font-size: 0.88rem;
+      color: #cbb99a;
+    }
+
+    .field-table td:first-child {
+      color: #e8d5b5;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      padding: 1.5rem;
+      color: #7a6a4a;
+      font-size: 0.8rem;
+      border-top: 1px solid #5c3a10;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .container { flex-direction: column; }
+      .sidebar {
+        width: 100%;
+        height: auto;
+        position: static;
+        border-right: none;
+        border-bottom: 1px solid #5c3a10;
+        padding: 1rem 0;
+      }
+      .content { padding: 1.5rem; }
+      .screenshot--modal { max-width: 100%; }
+    }
+
+    /* Print / PDF styles */
+    @media print {
+      body {
+        background-color: #fff;
+        color: #1a1a1a;
+        font-size: 11pt;
+        line-height: 1.5;
+      }
+
+      .sidebar { display: none; }
+
+      .hero {
+        background: none;
+        border-bottom: 2px solid #999;
+        padding: 1rem 0;
+      }
+
+      .hero h1 { color: #1a1a1a; font-size: 22pt; }
+      .hero p { color: #555; }
+
+      .container {
+        display: block;
+        max-width: 100%;
+      }
+
+      .content {
+        padding: 0;
+        max-width: 100%;
+      }
+
+      .content h2 {
+        color: #1a1a1a;
+        border-bottom-color: #999;
+        page-break-after: avoid;
+        margin-top: 1.5rem;
+      }
+
+      .content h3 {
+        color: #333;
+        page-break-after: avoid;
+      }
+
+      .content p, .content li { color: #333; }
+      .content li strong { color: #1a1a1a; }
+
+      .screenshot {
+        border-color: #ccc;
+        box-shadow: none;
+        page-break-inside: avoid;
+      }
+
+      .screenshot img {
+        max-width: 100%;
+      }
+
+      .screenshot figcaption {
+        background-color: #f5f5f5;
+        color: #666;
+        border-top-color: #ccc;
+      }
+
+      .screenshot--modal {
+        max-width: 360px;
+      }
+
+      .tip {
+        background-color: #f9f6f0;
+        border-left-color: #999;
+        page-break-inside: avoid;
+      }
+
+      .tip strong { color: #333; }
+
+      .code-block {
+        background-color: #f5f5f5;
+        border-color: #ccc;
+        color: #1a1a1a;
+        page-break-inside: avoid;
+      }
+
+      .field-table th {
+        background-color: #f0f0f0;
+        color: #333;
+        border-bottom-color: #999;
+      }
+
+      .field-table td {
+        color: #333;
+        border-bottom-color: #ddd;
+      }
+
+      .field-table td:first-child { color: #1a1a1a; }
+
+      .footer {
+        border-top-color: #999;
+        color: #999;
+      }
+
+      a { color: #1a1a1a; text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>FTA Raid Tools</h1>
+  <p>User Guide &mdash; v1.4.2</p>
+</div>
+
+<div class="container">
+  <nav class="sidebar">
+    <h3>Getting Started</h3>
+    <a href="#overview">Overview</a>
+    <a href="#settings">Settings</a>
+    <h3>Pages</h3>
+    <a href="#roster">Roster</a>
+    <a href="#raids">Raid Settings</a>
+    <a href="#attendance">Attendance</a>
+    <a href="#loot-history">Loot History</a>
+    <h3>Workflows</h3>
+    <a href="#workflow-raid-night">Raid Night Workflow</a>
+    <a href="#workflow-roll-modifiers">Roll Modifiers</a>
+  </nav>
+
+  <main class="content">
+
+    <!-- ==================== OVERVIEW ==================== -->
+    <h2 id="overview">Overview</h2>
+    <p>
+      FTA Raid Tools is a desktop application for managing raids, loot, and attendance for the
+      WoW TBC Anniversary guild <strong>From the Ashes</strong>. It connects to a Google Sheet for
+      persistent storage and integrates with Raid Helper for attendance tracking.
+    </p>
+    <p>The application has five main pages, accessible from the navigation bar:</p>
+    <ul>
+      <li><strong>Loot History</strong> &mdash; Import and track loot drops with per-raid deductions</li>
+      <li><strong>Roster</strong> &mdash; Manage guild members, their specs, and roll modifiers</li>
+      <li><strong>Attendance</strong> &mdash; Record raid attendance from Raid Helper events</li>
+      <li><strong>Raid</strong> &mdash; Configure per-raid settings (awards, deductions, penalties)</li>
+      <li><strong>Settings</strong> &mdash; Connection settings and global roll modifier bounds</li>
+    </ul>
+
+    <!-- ==================== SETTINGS ==================== -->
+    <h2 id="settings">Settings</h2>
+    <p>
+      The Settings page is where you configure your Google Sheets connection and global roll modifier
+      boundaries. This should be the first page you set up when using the application for the first time.
+    </p>
+
+    <figure class="screenshot">
+      <img src="images/settings-page.png" alt="Settings page">
+      <figcaption>The Settings page with Connection and Roll Modifier Settings sections</figcaption>
+    </figure>
+
+    <h3>Connection</h3>
+    <ul>
+      <li><strong>Google Sheet URL</strong> &mdash; The full URL of the Google Sheet used for data storage. The app reads from and writes to this sheet.</li>
+      <li><strong>Service Account Key File</strong> &mdash; A JSON key file for a Google Cloud service account. Click <strong>Browse...</strong> to select the file on your machine.</li>
+    </ul>
+
+    <div class="tip">
+      <strong>Tip:</strong> Make sure you share the Google Sheet with the service account email address
+      (found in the key file as <code>client_email</code>) with Editor permissions.
+    </div>
+
+    <h3>Roll Modifier Settings</h3>
+    <ul>
+      <li><strong>Minimum rollModifier</strong> &mdash; The lowest a player's roll modifier can go (e.g. 0). Deductions will not reduce a modifier below this value.</li>
+      <li><strong>Maximum rollModifier</strong> &mdash; The highest a player's roll modifier can reach (e.g. 10). Awards will not increase a modifier above this value.</li>
+    </ul>
+    <p>Click <strong>Save</strong> to persist both connection settings and roll modifier bounds.</p>
+
+    <!-- ==================== ROSTER ==================== -->
+    <h2 id="roster">Roster</h2>
+    <p>
+      The Roster page is the central registry of all guild members. Each member's character info,
+      specializations, professions, and current roll modifier are tracked here.
+    </p>
+
+    <figure class="screenshot">
+      <img src="images/roster-page.png" alt="Roster page">
+      <figcaption>The Roster page showing guild members with their details and roll modifiers</figcaption>
+    </figure>
+
+    <h3>Toolbar Actions</h3>
+    <ul>
+      <li><strong>Load from Sheet</strong> &mdash; Pulls the latest roster data from Google Sheets</li>
+      <li><strong>Save to Sheet</strong> &mdash; Pushes the current roster data to Google Sheets</li>
+      <li><strong>Add Member</strong> &mdash; Opens a dialog to add a new guild member</li>
+      <li><strong>Delete Selected</strong> &mdash; Removes selected members from the roster</li>
+    </ul>
+
+    <h3>Adding a Member</h3>
+    <figure class="screenshot screenshot--modal">
+      <img src="images/roster-page-modal-add-member.png" alt="Add Member dialog">
+      <figcaption>The Add Member dialog with all available fields</figcaption>
+    </figure>
+
+    <table class="field-table">
+      <thead>
+        <tr><th>Field</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Name</td><td>The character's in-game name</td></tr>
+        <tr><td>Raid-Helper name</td><td>The player's Discord / Raid Helper display name (used for matching attendance)</td></tr>
+        <tr><td>Rank</td><td>Guild rank (e.g. Officer, Raider, Trial)</td></tr>
+        <tr><td>Class</td><td>Character class (e.g. Shaman, Warrior, Paladin)</td></tr>
+        <tr><td>Main Spec (MS)</td><td>Primary specialization (e.g. Restoration, Protection)</td></tr>
+        <tr><td>Off Spec (OS)</td><td>Secondary specialization</td></tr>
+        <tr><td>Main</td><td>Main character name (leave blank if this is the main)</td></tr>
+        <tr><td>Profession 1 / 2</td><td>Character professions with skill level (e.g. Leatherworking 375)</td></tr>
+        <tr><td>Roll Modifier</td><td>The player's current balanced roll modifier value</td></tr>
+        <tr><td>Notes</td><td>Any additional notes about the player</td></tr>
+      </tbody>
+    </table>
+
+    <div class="tip">
+      <strong>Tip:</strong> The Raid-Helper name is important for matching attendance data. Make sure it
+      matches the player's display name in Raid Helper exactly.
+    </div>
+
+    <!-- ==================== RAID SETTINGS ==================== -->
+    <h2 id="raids">Raid Settings</h2>
+    <p>
+      The Raid page lets you configure per-raid settings that control how roll modifiers are calculated.
+      Each raid (e.g. Karazhan, Gruul's Lair) can have its own award and deduction values.
+    </p>
+
+    <figure class="screenshot">
+      <img src="images/raids-page.png" alt="Raid Settings page">
+      <figcaption>Raid Settings with per-raid configuration for awards and deductions</figcaption>
+    </figure>
+
+    <h3>Toolbar Actions</h3>
+    <ul>
+      <li><strong>Export Roll Modifiers</strong> &mdash; Exports the current roll modifier data</li>
+      <li><strong>Load from Sheet</strong> &mdash; Loads raid settings from Google Sheets</li>
+      <li><strong>Save to Sheet</strong> &mdash; Saves current raid settings to Google Sheets</li>
+      <li><strong>Add new Raid</strong> &mdash; Opens a dialog to create a new raid configuration</li>
+      <li><strong>Delete Selected</strong> &mdash; Removes selected raid configurations</li>
+    </ul>
+
+    <h3>Adding a Raid</h3>
+    <figure class="screenshot screenshot--modal">
+      <img src="images/raids-modal-new-entry.png" alt="Add new Raid dialog">
+      <figcaption>The Add new Raid dialog with all configuration fields</figcaption>
+    </figure>
+
+    <table class="field-table">
+      <thead>
+        <tr><th>Field</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>ID</td><td>A unique numeric identifier for the raid</td></tr>
+        <tr><td>Name</td><td>The raid name (e.g. Karazhan, Gruul's Lair)</td></tr>
+        <tr><td>Award for Completion</td><td>Roll modifier points awarded to each attendee upon raid completion (e.g. 0.1 &ndash; 0.2)</td></tr>
+        <tr><td>Item Win Deduction</td><td>Points deducted from a player's roll modifier when they win an item (e.g. 0.15)</td></tr>
+        <tr><td>Items Deduction Max</td><td>Maximum total deduction a player can receive from item wins in a single import (e.g. 0.4)</td></tr>
+        <tr><td>Absence Unexcused</td><td>Deduction applied when a signed-up player does not attend (e.g. 0.25)</td></tr>
+        <tr><td>Did Not Sign Up</td><td>Deduction applied when a roster member did not sign up for the event at all (e.g. 0.1)</td></tr>
+      </tbody>
+    </table>
+
+    <!-- ==================== ATTENDANCE ==================== -->
+    <h2 id="attendance">Attendance</h2>
+    <p>
+      The Attendance page lets you record raid attendance by pulling sign-up data from Raid Helper events.
+      It automatically matches event sign-ups to roster members and applies roll modifier awards and deductions.
+    </p>
+
+    <figure class="screenshot">
+      <img src="images/attendance-page.png" alt="Attendance page">
+      <figcaption>The Attendance page showing previous events</figcaption>
+    </figure>
+
+    <h3>Creating an Attendance Entry</h3>
+    <p>Click <strong>New Entry</strong> to open the attendance dialog.</p>
+
+    <figure class="screenshot screenshot--modal">
+      <img src="images/attendance-page-modal-new-entry.png" alt="New Attendance Entry dialog">
+      <figcaption>Select a raid and paste the Raid Helper event URL</figcaption>
+    </figure>
+
+    <ol>
+      <li>Select the <strong>Raid</strong> from the dropdown (this determines which raid settings to use for awards/deductions)</li>
+      <li>Paste the <strong>Raid Helper Event URL</strong> from your Discord event</li>
+      <li>Click <strong>Load Event</strong> to fetch the sign-up data</li>
+    </ol>
+
+    <h3>Reviewing Attendance</h3>
+    <p>
+      After loading the event, the application displays all sign-ups matched against the roster.
+      Each attendee is shown with their class, spec, role, award points, and the roster member they matched to.
+    </p>
+
+    <figure class="screenshot">
+      <img src="images/attendance-page-new-entry-overview.png" alt="Attendance entry overview">
+      <figcaption>Loaded attendance data showing matched roster members with award points and attendance checkboxes</figcaption>
+    </figure>
+
+    <ul>
+      <li><strong>Award</strong> &mdash; The points to be added to the player's roll modifier (from the raid's "Award for Completion" setting)</li>
+      <li><strong>Award To</strong> &mdash; Which roster member the points are awarded to (auto-matched by Raid Helper name)</li>
+      <li><strong>Attended</strong> &mdash; Checkbox to confirm the player actually attended. Uncheck to exclude them from receiving an award.</li>
+    </ul>
+
+    <h3>Absences and Sign-Up Tracking</h3>
+    <p>
+      Below the attendees list, the application shows two additional sections:
+    </p>
+
+    <figure class="screenshot">
+      <img src="images/attendance-page-new-entry-absences.png" alt="Attendance absences section">
+      <figcaption>Absences and "Did not sign up" sections with deductions</figcaption>
+    </figure>
+
+    <ul>
+      <li><strong>Absences</strong> &mdash; Lists roster members who signed up but were not present. These are shown as a reference list.</li>
+      <li><strong>Did not sign up</strong> &mdash; Lists roster members who did not sign up for the event. A deduction (configured per-raid) can be applied to their roll modifier.</li>
+    </ul>
+    <p>
+      Review the deductions, check the <strong>Apply</strong> checkbox for any "did not sign up" entries you want to penalize,
+      then click <strong>Confirm &amp; Award</strong> to apply all awards and deductions to the roster's roll modifiers.
+    </p>
+
+    <!-- ==================== LOOT HISTORY ==================== -->
+    <h2 id="loot-history">Loot History</h2>
+    <p>
+      The Loot History page tracks all loot drops across raids. Loot data is imported via CSV and
+      automatically applies item win deductions to players' roll modifiers based on the selected raid's settings.
+    </p>
+
+    <figure class="screenshot">
+      <img src="images/loot-history-page.png" alt="Loot History page">
+      <figcaption>The Loot History page showing imported loot entries</figcaption>
+    </figure>
+
+    <h3>Toolbar Actions</h3>
+    <ul>
+      <li><strong>Load from Sheet</strong> &mdash; Pulls loot history from Google Sheets</li>
+      <li><strong>Save to Sheet</strong> &mdash; Pushes loot history to Google Sheets</li>
+      <li><strong>Import Data</strong> &mdash; Opens the CSV import dialog</li>
+      <li><strong>Add New</strong> &mdash; Manually add a single loot entry</li>
+      <li><strong>Delete Selected</strong> &mdash; Removes selected loot entries</li>
+    </ul>
+
+    <h3>Importing Loot Data</h3>
+    <p>Click <strong>Import Data</strong> to open the import dialog.</p>
+
+    <figure class="screenshot screenshot--modal">
+      <img src="images/loot-history-modal-import-data.png" alt="Import data - raid selection">
+      <figcaption>Step 1: Select which raid this loot data is from</figcaption>
+    </figure>
+
+    <p>First, select the <strong>Raid</strong> this loot data belongs to. The raid selection determines which deduction values are applied.</p>
+
+    <figure class="screenshot screenshot--modal">
+      <img src="images/loot-history-modal-import-data-example.png" alt="Import data - CSV paste">
+      <figcaption>Step 2: Paste CSV data including the header row</figcaption>
+    </figure>
+
+    <p>Paste your CSV loot data into the text area. The data must include a header row with the following columns:</p>
+
+    <div class="code-block">Date,Player,Item,ItemID
+2026-04-01 20:08:42,Mehndi,Adornment of Stolen Souls,28762
+2026-04-01 19:20:05,Mehndi,Lionheart Helm,12640</div>
+
+    <h3>Verifying the Import</h3>
+    <p>
+      After pasting and clicking <strong>Import</strong>, a verification dialog appears showing
+      all parsed entries. Here you can mark items as <strong>Off-Spec (OS)</strong> &mdash; off-spec
+      items do not count toward roll modifier deductions.
+    </p>
+
+    <figure class="screenshot screenshot--modal">
+      <img src="images/loot-history-modal-import-data-verify.png" alt="Verify Import dialog">
+      <figcaption>Step 3: Review entries and mark off-spec items before confirming</figcaption>
+    </figure>
+
+    <p>
+      Check the <strong>OS?</strong> checkbox for any off-spec items, then click
+      <strong>Verify and import</strong> to finalize. The item win deductions from the selected
+      raid's settings will be applied to each player's roll modifier, up to the configured maximum
+      deduction cap.
+    </p>
+
+    <!-- ==================== WORKFLOWS ==================== -->
+    <h2 id="workflow-raid-night">Raid Night Workflow</h2>
+    <p>Here's a typical workflow for processing a raid night:</p>
+    <ol>
+      <li><strong>Before the raid</strong> &mdash; Ensure your Roster and Raid Settings are loaded from the sheet and up to date</li>
+      <li><strong>After the raid</strong> &mdash; Go to the Attendance page, create a new entry with the Raid Helper event URL, review and confirm awards/deductions</li>
+      <li><strong>Import loot</strong> &mdash; Go to Loot History, import the loot CSV from the raid, verify off-spec items, and confirm</li>
+      <li><strong>Save everything</strong> &mdash; Save the Roster (updated roll modifiers) and Loot History to the sheet</li>
+    </ol>
+
+    <h2 id="workflow-roll-modifiers">How Roll Modifiers Work</h2>
+    <p>
+      Roll modifiers are the core mechanic of the balanced loot system. Each player has a roll modifier
+      value that goes up when they attend raids and goes down when they win items or miss events.
+    </p>
+    <h3>Increases</h3>
+    <ul>
+      <li><strong>Raid completion</strong> &mdash; Each attended raid awards points based on the raid's "Award for Completion" value</li>
+    </ul>
+    <h3>Decreases</h3>
+    <ul>
+      <li><strong>Item wins</strong> &mdash; Winning a main-spec item deducts points based on the raid's "Item Win Deduction" value, up to the "Items Deduction Max" cap per import</li>
+      <li><strong>Unexcused absence</strong> &mdash; Signing up but not attending deducts points</li>
+      <li><strong>Did not sign up</strong> &mdash; Not signing up for an event can result in a deduction if applied by an officer</li>
+    </ul>
+    <h3>Boundaries</h3>
+    <p>
+      Roll modifiers are clamped between the <strong>Minimum rollModifier</strong> and
+      <strong>Maximum rollModifier</strong> values configured on the Settings page. This prevents
+      values from going too low (punishing inactive players forever) or too high (hoarding points).
+    </p>
+
+    <div class="tip">
+      <strong>Tip:</strong> Off-spec item wins do not affect roll modifiers. Mark items as OS during
+      the loot import verification step to exclude them from deductions.
+    </div>
+
+  </main>
+</div>
+
+<div class="footer">
+  FTA Raid Tools v1.4.2 &mdash; From the Ashes
+</div>
+
+</body>
+</html>
