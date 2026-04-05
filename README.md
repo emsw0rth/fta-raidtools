@@ -10,6 +10,10 @@ Desktop application for managing raids, loot, and attendance for the WoW TBC Ann
 - **Google Sheets Integration** - Load and save raid settings, loot history, and attendance data to Google Sheets
 - **Auto-Updates** - Automatic update notifications via GitHub Releases
 
+## User Guide
+
+For detailed usage instructions, see the [User Guide](https://emsw0rth.github.io/fta-raidtools/).
+
 ## Getting Started
 
 ### Prerequisites
