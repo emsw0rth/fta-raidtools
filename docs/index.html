@@ -107,6 +107,13 @@
       margin-bottom: 0.75rem;
     }
 
+    .content h4 {
+      color: #b89868;
+      font-size: 1rem;
+      margin-top: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+
     .content p {
       margin-bottom: 1rem;
       color: #cbb99a;
@@ -275,6 +282,11 @@
         page-break-after: avoid;
       }
 
+      .content h4 {
+        color: #555;
+        page-break-after: avoid;
+      }
+
       .content p, .content li { color: #333; }
       .content li strong { color: #1a1a1a; }
 
@@ -339,19 +351,25 @@
 
 <div class="hero">
   <h1>FTA Raid Tools</h1>
-  <p>User Guide &mdash; v1.4.2</p>
+  <p>User Guide &mdash; v1.5.0</p>
 </div>
 
 <div class="container">
   <nav class="sidebar">
+    <h3>For Raiders</h3>
+    <a href="#balanced-rolls">Balanced Rolls Explained</a>
     <h3>Getting Started</h3>
     <a href="#overview">Overview</a>
     <a href="#settings">Settings</a>
+    <a href="#raid-helper-config">Raid Helper Setup</a>
+    <h3>Configuration</h3>
+    <a href="#roll-modifier-settings">Roll Modifier Settings</a>
+    <a href="#raid-settings">Raid Settings</a>
     <h3>Pages</h3>
     <a href="#roster">Roster</a>
-    <a href="#raids">Raid Settings</a>
     <a href="#attendance">Attendance</a>
     <a href="#loot-history">Loot History</a>
+    <a href="#raid">Raid</a>
     <h3>Workflows</h3>
     <a href="#workflow-raid-night">Raid Night Workflow</a>
     <a href="#workflow-roll-modifiers">Roll Modifiers</a>
@@ -370,24 +388,174 @@
     <ul>
       <li><strong>Loot History</strong> &mdash; Import and track loot drops with per-raid deductions</li>
       <li><strong>Roster</strong> &mdash; Manage guild members, their specs, and roll modifiers</li>
-      <li><strong>Attendance</strong> &mdash; Record raid attendance from Raid Helper events</li>
-      <li><strong>Raid</strong> &mdash; Configure per-raid settings (awards, deductions, penalties)</li>
-      <li><strong>Settings</strong> &mdash; Connection settings and global roll modifier bounds</li>
+      <li><strong>Attendance</strong> &mdash; Record raid attendance directly from your Raid Helper events</li>
+      <li><strong>Raid</strong> &mdash; Export current roll modifiers for in-game use</li>
+      <li><strong>Settings</strong> &mdash; Three sub-tabs:
+        <em>General Settings</em> (Google Sheet + Raid Helper connection),
+        <em>Roll Modifier Settings</em> (min/max bounds), and
+        <em>Raid Settings</em> (per-raid awards and deductions)</li>
+    </ul>
+
+    <!-- ==================== FOR RAIDERS: BALANCED ROLLS ==================== -->
+    <h2 id="balanced-rolls">For Raiders: Balanced Rolls Explained</h2>
+    <p>
+      This section is for guild members who participate in raids but don't use the FTA Raid Tools
+      app themselves. It explains how <strong>Balanced Rolls</strong> work in-game, how you gain
+      and lose roll modifier points, and what happens when you win an item.
+    </p>
+
+    <h3>What are Balanced Rolls?</h3>
+    <p>
+      Every raider has a personal <strong>roll modifier</strong> &mdash; a number between
+      <strong>0.75</strong> and <strong>1.75</strong> that scales your in-game <code>/roll</code>.
+      Officers and master looters maintain it via FTA Raid Tools (this app), and the modifier
+      reaches the raid through two in-game addons developed for the guild:
+    </p>
+    <ul>
+      <li><strong><a href="https://github.com/emsw0rth/balanced-rolls" target="_blank" rel="noopener">Balanced Rolls</a></strong> &mdash; works alongside Gargul. When players <code>/roll</code> for an item, the master looter sees each player's roll multiplied by their modifier.</li>
+      <li><strong><a href="https://github.com/emsw0rth/gargul-history" target="_blank" rel="noopener">Gargul History</a></strong> &mdash; tracks who won what during the raid so officers can apply item-win deductions later.</li>
+    </ul>
+    <p>
+      Example: you <code>/roll</code> and the dice land on <strong>80</strong>. If your modifier is
+      <strong>0.9</strong>, the master looter sees your roll as <strong>72</strong>. If your modifier
+      is <strong>1.2</strong>, they see <strong>96</strong>. The modifier rewards consistent
+      attendance and balances against players who frequently win loot.
+    </p>
+
+    <h3>What's my starting modifier?</h3>
+    <p>
+      New members join with a roll modifier of <strong>1.0</strong> &mdash; in-game rolls are
+      unchanged from the dice value.
+    </p>
+
+    <h3>How do I gain points?</h3>
+    <ul>
+      <li><strong>Raid completion</strong> &mdash; Attending a raid that runs to completion awards points.</li>
+      <li><strong>Available on bench</strong> &mdash; Counted the same as attending. If officers ask you to bench, you still get the award.</li>
+    </ul>
+
+    <h3>How do I lose points?</h3>
+    <ul>
+      <li><strong>Winning items</strong> &mdash; Each main-spec item you win deducts points. Off-spec wins don't count. There's a per-raid cap so a single big-loot night can't tank your modifier.</li>
+      <li><strong>Unexcused absence</strong> &mdash; Signing up but not showing, or pulling out of a bench slot last-minute, deducts points.</li>
+      <li><strong>Did not sign up</strong> &mdash; If you don't sign up at all, a smaller deduction is applied.</li>
+    </ul>
+
+    <h3>What happens when I win an item?</h3>
+    <p>
+      After the raid, the master looter exports the loot history with the in-game addon and an
+      officer imports it into FTA Raid Tools. For each item you won, the import dialog has an
+      <strong>OS</strong> checkbox &mdash; if the item went to your off-spec, ticking that box
+      excludes it from the deduction. Main-spec items are deducted up to the per-raid cap.
+    </p>
+
+    <h3>Excused vs. unexcused absence</h3>
+    <p>
+      Life happens &mdash; vacations, work, family stuff, emergencies. As long as you let the
+      officer team know <em>in good time</em>, your absence is treated as <strong>excused</strong>
+      and you lose no points.
+    </p>
+    <p>
+      Skipping a raid without telling anyone &mdash; not signing up, not showing up after signing
+      up, or cancelling a bench position late &mdash; counts as <strong>unexcused absence</strong>
+      and a deduction is applied.
+    </p>
+    <div class="tip">
+      <strong>Tip:</strong> A quick message in Discord is enough. Officers want raids to fill out,
+      not to punish you for having a life.
+    </div>
+
+    <h3>Per-raid points</h3>
+    <p>
+      We've theorised extensively (with help from Claude and ChatGPT) to land on values that feel
+      fair for each raid. Karazhan has more bosses and is easier than Gruul's Lair, so the
+      per-completion award is smaller. Item-win and absence deductions are the same across raids.
+    </p>
+
+    <table class="field-table">
+      <thead>
+        <tr><th>Action</th><th>Karazhan</th><th>Gruul / Mag</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Raid completion / available on bench</td><td>+0.1</td><td>+0.2</td></tr>
+        <tr><td>Item win deduction (per item)</td><td>&minus;0.15</td><td>&minus;0.15</td></tr>
+        <tr><td>Item win deduction max (per raid)</td><td>&minus;0.4</td><td>&minus;0.4</td></tr>
+        <tr><td>Unexcused absence</td><td>&minus;0.25</td><td>&minus;0.25</td></tr>
+        <tr><td>Did not sign up</td><td>&minus;0.1</td><td>&minus;0.1</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Min/max cap</h3>
+    <p>
+      Roll modifiers are clamped between <strong>0.75</strong> (minimum) and <strong>1.75</strong>
+      (maximum). The floor protects against a string of bad luck driving someone unrecoverably
+      down; the ceiling prevents long-time low-loot raiders from snowballing far above everyone
+      else.
+    </p>
+
+    <h3>Worked examples</h3>
+
+    <h4>Example 1: New member, lucky in Karazhan</h4>
+    <p>
+      A new member joins the guild with a modifier of <strong>1.0</strong>. They attend Karazhan and
+      win <strong>3 items</strong>.
+    </p>
+    <ul>
+      <li>Raid completion: <strong>+0.1</strong></li>
+      <li>Item wins: 3 &times; &minus;0.15 = &minus;0.45, capped at <strong>&minus;0.4</strong></li>
+      <li>New modifier: 1.0 + 0.1 &minus; 0.4 = <strong>0.7</strong></li>
+      <li>Floored to the minimum cap: <strong>0.75</strong></li>
+    </ul>
+    <p>
+      The next week they attend Karazhan again and roll for one item. Their modifier is
+      <strong>0.75</strong>, so a <code>/roll</code> of <strong>69</strong> shows up to the master
+      looter as 69 &times; 0.75 = <strong>51.75</strong>. They lose the item to someone else.
+    </p>
+    <ul>
+      <li>Raid completion: <strong>+0.1</strong></li>
+      <li>No items won.</li>
+      <li>New modifier going into next raid: <strong>0.85</strong></li>
+    </ul>
+
+    <h4>Example 2: Veteran with the upper cap kicking in</h4>
+    <p>
+      A veteran has been raiding consistently for weeks without winning any items. Their modifier is
+      already at <strong>1.7</strong>. They attend Karazhan, complete the raid, and don't roll on
+      anything.
+    </p>
+    <ul>
+      <li>Raid completion: <strong>+0.1</strong></li>
+      <li>1.7 + 0.1 = <strong>1.8</strong>, capped at the maximum <strong>1.75</strong>.</li>
+    </ul>
+    <p>
+      The cap means there's no benefit to "saving up" past 1.75 &mdash; once you're at the ceiling,
+      your modifier stays there until you win loot or miss raids.
+    </p>
+
+    <h4>Example 3: Missing a raid &mdash; with and without notice</h4>
+    <p>
+      A raider at <strong>1.0</strong> can't make Gruul this week. Two scenarios:
+    </p>
+    <ul>
+      <li><strong>They tell officers</strong> on the Friday before raid that they have a work conflict. The absence is excused: <strong>no deduction</strong>, modifier stays at 1.0.</li>
+      <li><strong>They sign up, then ghost</strong>. Unexcused absence: &minus;0.25, modifier becomes <strong>0.75</strong>.</li>
     </ul>
 
     <!-- ==================== SETTINGS ==================== -->
     <h2 id="settings">Settings</h2>
     <p>
-      The Settings page is where you configure your Google Sheets connection and global roll modifier
-      boundaries. This should be the first page you set up when using the application for the first time.
+      The Settings page is organised into three sub-tabs along the top:
+      <strong>General Settings</strong>, <strong>Roll Modifier Settings</strong>, and
+      <strong>Raid Settings</strong>. The General Settings tab opens by default and is what you'll
+      configure first when setting up the app.
     </p>
 
     <figure class="screenshot">
-      <img src="images/settings-page.png" alt="Settings page">
-      <figcaption>The Settings page with Connection and Roll Modifier Settings sections</figcaption>
+      <img src="images/settings-page-general.png" alt="Settings page &mdash; General Settings tab">
+      <figcaption>The Settings page &mdash; General Settings tab with Connection and Raid Helper sections</figcaption>
     </figure>
 
-    <h3>Connection</h3>
+    <h3>Connection (General Settings tab)</h3>
     <ul>
       <li><strong>Google Sheet URL</strong> &mdash; The full URL of the Google Sheet used for data storage. The app reads from and writes to this sheet.</li>
       <li><strong>Service Account Key File</strong> &mdash; A JSON key file for a Google Cloud service account. Click <strong>Browse...</strong> to select the file on your machine.</li>
@@ -398,12 +566,82 @@
       (found in the key file as <code>client_email</code>) with Editor permissions.
     </div>
 
-    <h3>Roll Modifier Settings</h3>
+    <h3 id="raid-helper-config">Raid Helper (General Settings tab)</h3>
+    <p>
+      The Raid Helper section lets the app pull events directly from your Discord server's Raid Helper
+      bot, eliminating the need to copy event URLs by hand.
+    </p>
+    <ul>
+      <li><strong>Discord Server ID</strong> &mdash; The numeric ID of your Discord server. Enable Discord's developer mode (Settings &rarr; Advanced &rarr; Developer Mode), right-click your server name, and choose "Copy Server ID".</li>
+      <li><strong>API Key</strong> &mdash; A per-server token issued by the Raid Helper bot. Run <code>/apikey</code> in any channel of your Discord server to view it. The slash command requires the <em>Administrator</em> or <em>Manage Server</em> permission. If the key ever leaks, run <code>/apikey</code> again to refresh it.</li>
+      <li><strong>Earliest event date to load</strong> &mdash; A date filter applied when fetching events. Events before this date are excluded so the picker stays focused on relevant raids. Defaults to <code>2026-02-04</code>.</li>
+    </ul>
+    <div class="tip">
+      <strong>Tip:</strong> The API key is sensitive &mdash; treat it like a password. It's stored only
+      in your local app config, never in the Google Sheet.
+    </div>
+    <p>Click <strong>Save</strong> on the General Settings tab to persist all of the above.</p>
+
+    <!-- ==================== ROLL MODIFIER SETTINGS ==================== -->
+    <h2 id="roll-modifier-settings">Roll Modifier Settings</h2>
+    <p>
+      The <em>Roll Modifier Settings</em> sub-tab on the Settings page sets global bounds for every
+      player's roll modifier. These cap how high awards can push a value and how low deductions can
+      pull it.
+    </p>
+
+    <figure class="screenshot">
+      <img src="images/settings-page-rollmodifier.png" alt="Settings page &mdash; Roll Modifier Settings tab">
+      <figcaption>The Roll Modifier Settings sub-tab with min/max bounds</figcaption>
+    </figure>
+
     <ul>
       <li><strong>Minimum rollModifier</strong> &mdash; The lowest a player's roll modifier can go (e.g. 0). Deductions will not reduce a modifier below this value.</li>
       <li><strong>Maximum rollModifier</strong> &mdash; The highest a player's roll modifier can reach (e.g. 10). Awards will not increase a modifier above this value.</li>
     </ul>
-    <p>Click <strong>Save</strong> to persist both connection settings and roll modifier bounds.</p>
+    <p>This tab has its own <strong>Save</strong> button that writes the values to the <code>settings</code> tab of your Google Sheet.</p>
+
+    <!-- ==================== RAID SETTINGS ==================== -->
+    <h2 id="raid-settings">Raid Settings</h2>
+    <p>
+      The <em>Raid Settings</em> sub-tab on the Settings page lets you configure per-raid awards and
+      deductions. Each raid (e.g. Karazhan, Gruul's Lair) can have its own values, and the chosen
+      raid drives the points calculations during attendance and loot import.
+    </p>
+
+    <figure class="screenshot">
+      <img src="images/settings-page-raid.png" alt="Settings page &mdash; Raid Settings tab">
+      <figcaption>Raid Settings sub-tab with per-raid configuration for awards and deductions</figcaption>
+    </figure>
+
+    <h3>Toolbar Actions</h3>
+    <ul>
+      <li><strong>Load from Sheet</strong> &mdash; Loads raid settings from the <code>raidsettings</code> tab of your Google Sheet</li>
+      <li><strong>Save to Sheet</strong> &mdash; Saves current raid settings back to the sheet</li>
+      <li><strong>Add new Raid</strong> &mdash; Opens a dialog to create a new raid configuration</li>
+      <li><strong>Delete Selected</strong> &mdash; Removes selected raid configurations</li>
+    </ul>
+
+    <h3>Adding a Raid</h3>
+    <figure class="screenshot screenshot--modal">
+      <img src="images/raids-modal-new-entry.png" alt="Add new Raid dialog">
+      <figcaption>The Add new Raid dialog with all configuration fields</figcaption>
+    </figure>
+
+    <table class="field-table">
+      <thead>
+        <tr><th>Field</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>ID</td><td>A unique numeric identifier for the raid</td></tr>
+        <tr><td>Name</td><td>The raid name (e.g. Karazhan, Gruul's Lair)</td></tr>
+        <tr><td>Award for Completion</td><td>Roll modifier points awarded to each attendee upon raid completion (e.g. 0.1 &ndash; 0.2)</td></tr>
+        <tr><td>Item Win Deduction</td><td>Points deducted from a player's roll modifier when they win an item (e.g. 0.15)</td></tr>
+        <tr><td>Items Deduction Max</td><td>Maximum total deduction a player can receive from item wins in a single import (e.g. 0.4)</td></tr>
+        <tr><td>Absence Unexcused</td><td>Deduction applied when a signed-up player does not attend (e.g. 0.25)</td></tr>
+        <tr><td>Did Not Sign Up</td><td>Deduction applied when a roster member did not sign up for the event at all (e.g. 0.1)</td></tr>
+      </tbody>
+    </table>
 
     <!-- ==================== ROSTER ==================== -->
     <h2 id="roster">Roster</h2>
@@ -454,48 +692,6 @@
       matches the player's display name in Raid Helper exactly.
     </div>
 
-    <!-- ==================== RAID SETTINGS ==================== -->
-    <h2 id="raids">Raid Settings</h2>
-    <p>
-      The Raid page lets you configure per-raid settings that control how roll modifiers are calculated.
-      Each raid (e.g. Karazhan, Gruul's Lair) can have its own award and deduction values.
-    </p>
-
-    <figure class="screenshot">
-      <img src="images/raids-page.png" alt="Raid Settings page">
-      <figcaption>Raid Settings with per-raid configuration for awards and deductions</figcaption>
-    </figure>
-
-    <h3>Toolbar Actions</h3>
-    <ul>
-      <li><strong>Export Roll Modifiers</strong> &mdash; Exports the current roll modifier data</li>
-      <li><strong>Load from Sheet</strong> &mdash; Loads raid settings from Google Sheets</li>
-      <li><strong>Save to Sheet</strong> &mdash; Saves current raid settings to Google Sheets</li>
-      <li><strong>Add new Raid</strong> &mdash; Opens a dialog to create a new raid configuration</li>
-      <li><strong>Delete Selected</strong> &mdash; Removes selected raid configurations</li>
-    </ul>
-
-    <h3>Adding a Raid</h3>
-    <figure class="screenshot screenshot--modal">
-      <img src="images/raids-modal-new-entry.png" alt="Add new Raid dialog">
-      <figcaption>The Add new Raid dialog with all configuration fields</figcaption>
-    </figure>
-
-    <table class="field-table">
-      <thead>
-        <tr><th>Field</th><th>Description</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>ID</td><td>A unique numeric identifier for the raid</td></tr>
-        <tr><td>Name</td><td>The raid name (e.g. Karazhan, Gruul's Lair)</td></tr>
-        <tr><td>Award for Completion</td><td>Roll modifier points awarded to each attendee upon raid completion (e.g. 0.1 &ndash; 0.2)</td></tr>
-        <tr><td>Item Win Deduction</td><td>Points deducted from a player's roll modifier when they win an item (e.g. 0.15)</td></tr>
-        <tr><td>Items Deduction Max</td><td>Maximum total deduction a player can receive from item wins in a single import (e.g. 0.4)</td></tr>
-        <tr><td>Absence Unexcused</td><td>Deduction applied when a signed-up player does not attend (e.g. 0.25)</td></tr>
-        <tr><td>Did Not Sign Up</td><td>Deduction applied when a roster member did not sign up for the event at all (e.g. 0.1)</td></tr>
-      </tbody>
-    </table>
-
     <!-- ==================== ATTENDANCE ==================== -->
     <h2 id="attendance">Attendance</h2>
     <p>
@@ -509,23 +705,30 @@
     </figure>
 
     <h3>Creating an Attendance Entry</h3>
-    <p>Click <strong>New Entry</strong> to open the attendance dialog.</p>
+    <p>Click <strong>New Entry</strong> to open the event picker.</p>
 
     <figure class="screenshot screenshot--modal">
       <img src="images/attendance-page-modal-new-entry.png" alt="New Attendance Entry dialog">
-      <figcaption>Select a raid and paste the Raid Helper event URL</figcaption>
+      <figcaption>Pick a raid from the dropdown, then choose the past event to import</figcaption>
     </figure>
 
     <ol>
-      <li>Select the <strong>Raid</strong> from the dropdown (this determines which raid settings to use for awards/deductions)</li>
-      <li>Paste the <strong>Raid Helper Event URL</strong> from your Discord event</li>
-      <li>Click <strong>Load Event</strong> to fetch the sign-up data</li>
+      <li>Select the <strong>Raid</strong> from the dropdown (this determines which raid settings drive awards and deductions).</li>
+      <li>Browse the list of past events fetched directly from your Raid Helper server. Use the <strong>search field</strong> at the top to filter by event name (case-insensitive substring match), and toggle <strong>Show already-imported</strong> to reveal events you've already processed (they're hidden by default).</li>
+      <li>Click an event row to load its data into the attendance form.</li>
     </ol>
+
+    <div class="tip">
+      <strong>Tip:</strong> The picker only shows events on or after the
+      <em>Earliest event date</em> configured in Settings &rarr; General Settings. Older events are
+      filtered out before they reach you.
+    </div>
 
     <h3>Reviewing Attendance</h3>
     <p>
-      After loading the event, the application displays all sign-ups matched against the roster.
-      Each attendee is shown with their class, spec, role, award points, and the roster member they matched to.
+      The attendance form opens in a modal with a scrollable body and a pinned <strong>Confirm &amp; Award</strong>
+      footer. Each attendee row shows class, spec, role, award points, the matched roster member, and an
+      attended checkbox.
     </p>
 
     <figure class="screenshot">
@@ -534,14 +737,27 @@
     </figure>
 
     <ul>
-      <li><strong>Award</strong> &mdash; The points to be added to the player's roll modifier (from the raid's "Award for Completion" setting)</li>
-      <li><strong>Award To</strong> &mdash; Which roster member the points are awarded to (auto-matched by Raid Helper name)</li>
+      <li><strong>Award</strong> &mdash; The points to be added to the player's roll modifier (from the raid's "Award for Completion" setting).</li>
+      <li><strong>Award To</strong> &mdash; Which roster member the points are awarded to (auto-matched by Raid-Helper name, falling back to character name).</li>
       <li><strong>Attended</strong> &mdash; Checkbox to confirm the player actually attended. Uncheck to exclude them from receiving an award.</li>
+    </ul>
+
+    <h3>Unknown Players</h3>
+    <p>
+      Sign-ups whose name doesn't match any roster member are pulled into a dedicated
+      <strong>Unknown Players</strong> section at the very top of the form &mdash; this is where the rows
+      that need your attention sit. For each unknown sign-up, pick a roster member from the
+      <strong>Credit to</strong> dropdown to award them the points, or leave the default
+      <em>"(don't credit)"</em> for a pug or a new member you don't want to credit yet.
+    </p>
+    <ul>
+      <li>If you pick a roster member, that person is awarded as if the sign-up had matched directly.</li>
+      <li>If you leave <em>"(don't credit)"</em>, the sign-up is silently skipped on confirm &mdash; no warning, no roster change.</li>
     </ul>
 
     <h3>Absences and Sign-Up Tracking</h3>
     <p>
-      Below the attendees list, the application shows two additional sections:
+      Below the attendees list, the form shows two additional sections:
     </p>
 
     <figure class="screenshot">
@@ -550,13 +766,28 @@
     </figure>
 
     <ul>
-      <li><strong>Absences</strong> &mdash; Lists roster members who signed up but were not present. These are shown as a reference list.</li>
-      <li><strong>Did not sign up</strong> &mdash; Lists roster members who did not sign up for the event. A deduction (configured per-raid) can be applied to their roll modifier.</li>
+      <li><strong>Absences</strong> &mdash; Roster members who signed up as Absent. Reference list only.</li>
+      <li><strong>Did not sign up</strong> &mdash; Roster members who didn't sign up for the event at all. A deduction (configured per-raid) can be applied to their roll modifier.</li>
     </ul>
     <p>
-      Review the deductions, check the <strong>Apply</strong> checkbox for any "did not sign up" entries you want to penalize,
-      then click <strong>Confirm &amp; Award</strong> to apply all awards and deductions to the roster's roll modifiers.
+      Review the deductions, check the <strong>Apply</strong> checkbox for any "did not sign up" entries you want to penalise,
+      then click <strong>Confirm &amp; Award</strong> to apply all awards and deductions. The footer shows
+      progress while the roster, attendance, and import-history sheets save in parallel; if anything
+      fails, the error appears inline in the footer instead of being hidden.
     </p>
+
+    <h3>Previous Events</h3>
+    <p>
+      The list under the attendance toolbar shows every event you've recorded, sorted newest-first
+      and capped at 45vh with a scrollbar. Each row has a <strong>×</strong> button that deletes the
+      entry from both the local store and the <code>attendance</code> tab of the Google Sheet (with
+      confirmation).
+    </p>
+    <div class="tip">
+      <strong>Tip:</strong> Deleting a previous event does <em>not</em> remove it from the
+      <code>rh-import-history</code> tab, so the picker still treats it as imported. Toggle
+      <em>Show already-imported</em> if you want to re-import it.
+    </div>
 
     <!-- ==================== LOOT HISTORY ==================== -->
     <h2 id="loot-history">Loot History</h2>
@@ -619,14 +850,36 @@
       deduction cap.
     </p>
 
+    <!-- ==================== RAID PAGE ==================== -->
+    <h2 id="raid">Raid</h2>
+    <p>
+      The Raid page is a single-purpose tool for exporting current roll modifiers from a specific
+      raid sign-up. The output is JSON copied to your clipboard, ready to paste into your in-game
+      tool of choice.
+    </p>
+
+    <h3>Export Roll Modifiers</h3>
+    <ol>
+      <li>Click <strong>Export Roll Modifiers</strong> on the Raid page.</li>
+      <li>Pick a past Raid Helper event from the same picker used for attendance.</li>
+      <li>For each non-Absent sign-up the app looks up the matching roster member and lists their current roll modifier alongside the sign-up name.</li>
+      <li>Click <strong>Export to clipboard</strong> to copy the result as JSON.</li>
+    </ol>
+
+    <p>
+      This page is read-only &mdash; nothing is written back to the sheet, so importing here doesn't
+      get recorded in <code>rh-import-history</code>.
+    </p>
+
     <!-- ==================== WORKFLOWS ==================== -->
     <h2 id="workflow-raid-night">Raid Night Workflow</h2>
     <p>Here's a typical workflow for processing a raid night:</p>
     <ol>
-      <li><strong>Before the raid</strong> &mdash; Ensure your Roster and Raid Settings are loaded from the sheet and up to date</li>
-      <li><strong>After the raid</strong> &mdash; Go to the Attendance page, create a new entry with the Raid Helper event URL, review and confirm awards/deductions</li>
-      <li><strong>Import loot</strong> &mdash; Go to Loot History, import the loot CSV from the raid, verify off-spec items, and confirm</li>
-      <li><strong>Save everything</strong> &mdash; Save the Roster (updated roll modifiers) and Loot History to the sheet</li>
+      <li><strong>Before the raid</strong> &mdash; Ensure your Roster and Raid Settings are loaded from the sheet and up to date.</li>
+      <li><strong>During the raid</strong> &mdash; Go to the Raid page and use <em>Export Roll Modifiers</em> with the current event's sign-ups to copy roll modifiers into your in-game roll tool.</li>
+      <li><strong>After the raid</strong> &mdash; Go to the Attendance page, click <strong>New Entry</strong>, pick the event from the picker, handle any unknown players in the top section, then <strong>Confirm &amp; Award</strong>.</li>
+      <li><strong>Import loot</strong> &mdash; Go to Loot History, import the loot CSV from the raid, verify off-spec items, and confirm.</li>
+      <li><strong>Save everything</strong> &mdash; Save the Loot History to the sheet (Roster and Attendance saves happen automatically when you confirm an attendance entry).</li>
     </ol>
 
     <h2 id="workflow-roll-modifiers">How Roll Modifiers Work</h2>
@@ -660,7 +913,7 @@
 </div>
 
 <div class="footer">
-  FTA Raid Tools v1.4.2 &mdash; From the Ashes
+  FTA Raid Tools v1.5.0 &mdash; From the Ashes
 </div>
 
 </body>

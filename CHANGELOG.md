@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.5.0
+
+### New Features
+- **Direct Raid Helper API control** - New attendance and roll-modifier flows pull events from your server via the Raid Helper API, with no more pasting URLs. Configure your Discord server ID, API key, and earliest-event date in Settings → General Settings
+- **Event picker** - A searchable list of past events replaces the URL prompt; type to filter by name and a "Show already-imported" toggle hides events you've already processed
+- **Import history tracking** - A new `rh-import-history` Google Sheet tab records every event imported (event ID, title, date, time, leader, channel, timestamp), driving the "imported" badge in the picker
+- **Unknown Players section** - Sign-ups whose names don't match any roster member now appear in a dedicated section at the top of the attendance form with a roster dropdown, so pugs and new members can be credited correctly (or marked as not credited)
+- **Settings sub-tabs** - Settings page reorganised into General Settings, Roll Modifier Settings, and Raid Settings (raid configs moved here from the Raid page)
+- **Per-row delete on Previous Events** - Each previous attendance entry now has a × button that removes the row and persists the change to the Google Sheet
+
+### Changes
+- Attendance entry form now opens in a wide modal with a pinned Confirm & Award footer, scrollable body, and inline progress text
+- Confirm & Award now writes the roster, attendance, and import-history sheets in parallel for noticeably faster saves
+- Previous Events list is sorted newest-first (using the event's startTime when available) and capped at 45vh with a scrollbar
+- Raid page is now just the Export Roll Modifiers tool — Raid Settings live in Settings
+
+### Bug Fixes
+- Errors during Confirm & Award are now surfaced inline in the modal footer instead of being silently swallowed
+
+### Documentation
+- User guide (https://emsw0rth.github.io/fta-raidtools/) refreshed for v1.5.0: Settings split into General / Roll Modifier / Raid Settings sub-tabs, Raid Helper setup walkthrough, event picker workflow, Unknown Players handling, and Previous Events deletion/sort
+- New "For Raiders: Balanced Rolls Explained" section in the user guide aimed at guild members who don't use the app — covers how the in-game addons work, points awarded/deducted per raid, excused vs unexcused absence, the 0.75–1.75 cap, and worked examples
+
 ## v1.4.2
 
 ### Changes

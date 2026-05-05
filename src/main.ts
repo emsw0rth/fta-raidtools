@@ -38,6 +38,63 @@ function fetchRaidHelperEvent(eventId: string): Promise<unknown> {
   });
 }
 
+function isoDateToUnixSeconds(isoDate: string): number | null {
+  if (!isoDate) return null;
+  // Treat YYYY-MM-DD as local-midnight so the filter aligns with the user's calendar day.
+  const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const d = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  if (isNaN(d.getTime())) return null;
+  return Math.floor(d.getTime() / 1000);
+}
+
+function fetchRaidHelperServerEvents(
+  serverId: string,
+  apiKey: string,
+  page: number,
+  startDateIso: string,
+): Promise<unknown> {
+  const https = require("https") as typeof import("https");
+  if (!serverId) return Promise.reject(new Error("Raid Helper server ID is not configured. Open Settings."));
+  if (!apiKey) return Promise.reject(new Error("Raid Helper API key is not configured. Open Settings."));
+
+  const url = `https://raid-helper.xyz/api/v4/servers/${encodeURIComponent(serverId)}/events`;
+  const parsed = new URL(url);
+  const headers: Record<string, string> = {
+    Authorization: apiKey,
+    Page: String(page > 0 ? page : 1),
+  };
+
+  const startUnix = isoDateToUnixSeconds(startDateIso);
+  if (startUnix !== null) {
+    headers.StartTimeFilter = String(startUnix);
+  }
+
+  const options: import("https").RequestOptions = {
+    hostname: parsed.hostname,
+    path: parsed.pathname,
+    method: "GET",
+    headers,
+  };
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(options, (res) => {
+      let data = "";
+      res.on("data", (chunk: Buffer) => (data += chunk));
+      res.on("end", () => {
+        if (res.statusCode !== 200) {
+          reject(new Error(`Raid Helper returned HTTP ${res.statusCode}: ${data.slice(0, 200)}`));
+          return;
+        }
+        try { resolve(JSON.parse(data)); }
+        catch { reject(new Error("Invalid JSON from Raid Helper")); }
+      });
+    });
+    req.on("error", (err: Error) => reject(err));
+    req.end();
+  });
+}
+
 function registerIpcHandlers(): void {
   ipcMain.handle("config:load", () => loadConfig());
   ipcMain.handle("config:save", (_event, config: AppConfig) => saveConfig(config));
@@ -78,6 +135,15 @@ function registerIpcHandlers(): void {
     return fs.readFileSync(result.filePaths[0], "utf-8");
   });
   ipcMain.handle("raidhelper:event", (_event, eventId: string) => fetchRaidHelperEvent(eventId));
+  ipcMain.handle("raidhelper:server-events", (_event, page: number = 1) => {
+    const config = loadConfig();
+    return fetchRaidHelperServerEvents(
+      config.raidHelperServerId,
+      config.raidHelperApiKey,
+      page,
+      config.raidHelperEventStartDate,
+    );
+  });
   ipcMain.handle("dialog:select-service-account", async () => {
     const result = await dialog.showOpenDialog({
       title: "Select Service Account Key File",

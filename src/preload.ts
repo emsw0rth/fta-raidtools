@@ -8,5 +8,6 @@ contextBridge.exposeInMainWorld("api", {
   openCsvFile: () => ipcRenderer.invoke("dialog:open-csv"),
   fetchItemTooltip: (itemId: number) => ipcRenderer.invoke("wowhead:tooltip", itemId),
   fetchRaidHelperEvent: (eventId: string) => ipcRenderer.invoke("raidhelper:event", eventId),
+  fetchRaidHelperServerEvents: (page?: number) => ipcRenderer.invoke("raidhelper:server-events", page ?? 1),
   selectServiceAccountKey: () => ipcRenderer.invoke("dialog:select-service-account"),
 });

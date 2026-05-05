@@ -17,9 +17,44 @@ interface RaidHelperEvent {
   signUps: RaidHelperSignUp[];
 }
 
+interface RaidHelperServerEventListItem {
+  id: string;
+  serverId?: string;
+  title?: string;
+  description?: string;
+  leaderId?: string;
+  leaderName?: string;
+  channelId?: string;
+  channelName?: string;
+  channelType?: string;
+  templateId?: string;
+  templateEmoteId?: string;
+  date?: string;
+  time?: string;
+  startTime?: number;
+  endTime?: number;
+  closingTime?: number;
+  lastUpdated?: number;
+  softresId?: string;
+  color?: string;
+  [key: string]: unknown;
+}
+
+interface RaidHelperServerEventsResponse {
+  pages?: number;
+  currentPage?: number;
+  eventCountOverall?: number;
+  eventCountTransmitted?: number;
+  postedEvents?: RaidHelperServerEventListItem[];
+  [key: string]: unknown;
+}
+
 interface AppConfig {
   googleSheetUrl: string;
   serviceAccountKeyPath: string;
+  raidHelperServerId: string;
+  raidHelperApiKey: string;
+  raidHelperEventStartDate: string;
 }
 
 interface ElectronApi {
@@ -30,6 +65,7 @@ interface ElectronApi {
   openCsvFile(): Promise<string | null>;
   fetchItemTooltip(itemId: number): Promise<{ name: string; quality: number; icon: string; tooltip: string }>;
   fetchRaidHelperEvent(eventId: string): Promise<RaidHelperEvent>;
+  fetchRaidHelperServerEvents(page?: number): Promise<RaidHelperServerEventsResponse>;
   selectServiceAccountKey(): Promise<string | null>;
 }
 

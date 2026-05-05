@@ -9,11 +9,13 @@ import { rosterStore } from "./store/RosterStore";
 import { attendanceStore } from "./store/AttendanceStore";
 import { settingsStore } from "./store/SettingsStore";
 import { raidSettingsStore } from "./store/RaidSettingsStore";
+import { rhImportHistoryStore } from "./store/RhImportHistoryStore";
 import { LootEntry } from "./models/LootEntry";
 import { RosterEntry } from "./models/RosterEntry";
 import { AttendanceEntry } from "./models/AttendanceEntry";
 import { SettingsEntry } from "./models/SettingsEntry";
 import { RaidSettingsEntry } from "./models/RaidSettingsEntry";
+import { RhImportHistoryEntry } from "./models/RhImportHistoryEntry";
 
 type PageFactory = () => HTMLElement;
 
@@ -87,6 +89,19 @@ function parseAttendanceRows(rows: string[][]): AttendanceEntry[] {
   }));
 }
 
+function parseRhImportHistoryRows(rows: string[][]): RhImportHistoryEntry[] {
+  if (rows.length < 2) return [];
+  return rows.slice(1).map((row) => ({
+    eventId: row[0]?.trim() ?? "",
+    title: row[1]?.trim() ?? "",
+    date: row[2]?.trim() ?? "",
+    time: row[3]?.trim() ?? "",
+    leaderName: row[4]?.trim() ?? "",
+    channelId: row[5]?.trim() ?? "",
+    importedAt: row[6]?.trim() ?? "",
+  }));
+}
+
 async function preloadSheetData(): Promise<void> {
   const config = await window.api.loadConfig();
   if (!config.googleSheetUrl || !config.serviceAccountKeyPath) return;
@@ -133,6 +148,14 @@ async function preloadSheetData(): Promise<void> {
     );
   }
 
+  if (rhImportHistoryStore.getAll().length === 0) {
+    fetches.push(
+      window.api.fetchSheet("rh-import-history").then((rows) => {
+        rhImportHistoryStore.replaceAll(parseRhImportHistoryRows(rows));
+      }).catch((err) => console.error("Preload rh-import-history failed:", err))
+    );
+  }
+
   await Promise.all(fetches);
 }
 
@@ -156,7 +179,7 @@ function init(): void {
 
   const version = document.createElement("span");
   version.className = "app-version";
-  version.textContent = "v1.4.2";
+  version.textContent = "v1.5.0";
 
   bannerWrap.appendChild(banner);
   bannerWrap.appendChild(version);

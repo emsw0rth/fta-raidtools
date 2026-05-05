@@ -1,15 +1,20 @@
 import { RosterEntry } from "../../models/RosterEntry";
 import { AttendanceEntry } from "../../models/AttendanceEntry";
 import { RaidSettingsEntry } from "../../models/RaidSettingsEntry";
+import { RhImportHistoryEntry } from "../../models/RhImportHistoryEntry";
 import { rosterStore } from "../../store/RosterStore";
 import { attendanceStore } from "../../store/AttendanceStore";
 import { settingsStore } from "../../store/SettingsStore";
 import { raidSettingsStore } from "../../store/RaidSettingsStore";
+import { rhImportHistoryStore } from "../../store/RhImportHistoryStore";
+import { createRhEventPicker } from "../molecules/RhEventPicker";
 
 const ROSTER_SHEET = "roster";
 const ROSTER_HEADERS = ["Name", "Raid-Helper name", "Rank", "Class", "MS", "OS", "Main", "Profession 1", "Profession 2", "Roll Modifier", "Notes"];
 const ATTENDANCE_SHEET = "attendance";
 const ATTENDANCE_HEADERS = ["Date", "Event Name", "Link", "Roster"];
+const RH_IMPORT_HISTORY_SHEET = "rh-import-history";
+const RH_IMPORT_HISTORY_HEADERS = ["Event ID", "Title", "Date", "Time", "Leader", "Channel ID", "Imported At"];
 
 function findRosterName(signUpName: string): string {
   const roster = rosterStore.getAll();
@@ -26,20 +31,6 @@ function findRosterName(signUpName: string): string {
   return "";
 }
 
-function extractEventId(input: string): string | null {
-  const trimmed = input.trim();
-
-  // Match: https://raid-helper.dev/api/v2/events/<id> or .xyz
-  const apiMatch = trimmed.match(/raid-helper\.(?:dev|xyz)\/api\/v2\/events\/(\d+)/);
-  if (apiMatch) return apiMatch[1];
-
-  // Match: https://raid-helper.dev/event/<id> or .xyz
-  const eventMatch = trimmed.match(/raid-helper\.(?:dev|xyz)\/event\/(\d+)/);
-  if (eventMatch) return eventMatch[1];
-
-  return null;
-}
-
 function roleSort(roleName: string | undefined): number {
   switch (roleName) {
     case "Tanks": return 0;
@@ -50,12 +41,14 @@ function roleSort(roleName: string | undefined): number {
   }
 }
 
-function showUrlPrompt(onSubmit: (eventId: string, raidSettings: RaidSettingsEntry) => void): void {
+function showEventPicker(
+  onSubmit: (event: RaidHelperServerEventListItem, raidSettings: RaidSettingsEntry) => void,
+): void {
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
 
   const modal = document.createElement("div");
-  modal.className = "modal";
+  modal.className = "modal modal--wide";
 
   const title = document.createElement("h3");
   title.className = "modal__title";
@@ -91,7 +84,7 @@ function showUrlPrompt(onSubmit: (eventId: string, raidSettings: RaidSettingsEnt
   const raidError = document.createElement("div");
   raidError.className = "modal__error";
   raidError.style.display = "none";
-  raidError.textContent = "Please select a raid.";
+  raidError.textContent = "Please select a raid before picking an event.";
 
   raidSelect.addEventListener("change", () => {
     raidError.style.display = "none";
@@ -102,63 +95,34 @@ function showUrlPrompt(onSubmit: (eventId: string, raidSettings: RaidSettingsEnt
   raidField.appendChild(raidError);
   modal.appendChild(raidField);
 
-  /* ── URL field ── */
-  const field = document.createElement("div");
-  field.className = "modal__field";
+  /* ── Event picker ── */
+  const pickerLabel = document.createElement("label");
+  pickerLabel.className = "modal__label";
+  pickerLabel.textContent = "Select an event";
+  modal.appendChild(pickerLabel);
 
-  const label = document.createElement("label");
-  label.className = "modal__label";
-  label.textContent = "Raid Helper Event URL";
-
-  const input = document.createElement("input");
-  input.type = "text";
-  input.className = "modal__input";
-  input.placeholder = "https://raid-helper.dev/event/...";
-
-  const error = document.createElement("div");
-  error.className = "attendance-url-error";
-  error.style.display = "none";
-  error.textContent = "Invalid URL. Use a raid-helper.dev or raid-helper.xyz event or API URL.";
-
-  field.appendChild(label);
-  field.appendChild(input);
-  field.appendChild(error);
-  modal.appendChild(field);
+  const picker = createRhEventPicker({
+    onSelect: (ev) => {
+      if (!raidSelect.value) {
+        raidError.style.display = "block";
+        raidSelect.focus();
+        return;
+      }
+      const selectedRaid = raids.find((r) => r.id === raidSelect.value);
+      if (!selectedRaid) return;
+      overlay.remove();
+      onSubmit(ev, selectedRaid);
+    },
+  });
+  modal.appendChild(picker);
 
   const actions = document.createElement("div");
   actions.className = "modal__actions";
-
-  const submitBtn = document.createElement("button");
-  submitBtn.className = "btn btn--primary";
-  submitBtn.textContent = "Load Event";
-  submitBtn.addEventListener("click", () => {
-    if (!raidSelect.value) {
-      raidError.style.display = "block";
-      raidSelect.focus();
-      return;
-    }
-    const eventId = extractEventId(input.value);
-    if (!eventId) {
-      error.style.display = "block";
-      input.focus();
-      return;
-    }
-    const selectedRaid = raids.find((r) => r.id === raidSelect.value);
-    if (!selectedRaid) return;
-    overlay.remove();
-    onSubmit(eventId, selectedRaid);
-  });
-
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") submitBtn.click();
-  });
 
   const cancelBtn = document.createElement("button");
   cancelBtn.className = "btn";
   cancelBtn.textContent = "Cancel";
   cancelBtn.addEventListener("click", () => overlay.remove());
-
-  actions.appendChild(submitBtn);
   actions.appendChild(cancelBtn);
   modal.appendChild(actions);
 
@@ -171,7 +135,13 @@ function showUrlPrompt(onSubmit: (eventId: string, raidSettings: RaidSettingsEnt
   raidSelect.focus();
 }
 
-function buildAttendanceForm(event: RaidHelperEvent, eventId: string, raidSettings: RaidSettingsEntry): HTMLElement {
+function buildAttendanceForm(
+  event: RaidHelperEvent,
+  eventId: string,
+  raidSettings: RaidSettingsEntry,
+  channelId: string,
+  onSuccess: () => void,
+): { body: HTMLElement; footer: HTMLElement } {
   const container = document.createElement("div");
   container.className = "attendance-form";
 
@@ -192,9 +162,14 @@ function buildAttendanceForm(event: RaidHelperEvent, eventId: string, raidSettin
   container.appendChild(header);
 
   // Filter out absences and sort by role
-  const attendees = event.signUps
+  const allAttendees = event.signUps
     .filter((s) => s.className !== "Absence")
     .sort((a, b) => roleSort(a.roleName) - roleSort(b.roleName));
+
+  // Split into matched (have a roster identity) and unknown (no roster match —
+  // could be a pug, new member, or a typo in the sign-up name).
+  const attendees = allAttendees.filter((s) => findRosterName(s.name) !== "");
+  const unknownAttendees = allAttendees.filter((s) => findRosterName(s.name) === "");
 
   const absences = event.signUps.filter((s) => s.className === "Absence");
 
@@ -271,6 +246,111 @@ function buildAttendanceForm(event: RaidHelperEvent, eventId: string, raidSettin
     row.appendChild(checkWrap);
     list.appendChild(row);
   });
+
+  // Unknown players section — sign-ups whose name didn't match any roster entry.
+  // Rendered above the matched attendees list so the rows that need user action are
+  // immediately visible.
+  const unknownList = document.createElement("div");
+  unknownList.className = "attendance-list";
+
+  if (unknownAttendees.length > 0) {
+    const unknownSection = document.createElement("div");
+    unknownSection.className = "attendance-absences attendance-absences--top";
+
+    const unknownTitle = document.createElement("h3");
+    unknownTitle.className = "attendance-absences-title";
+    unknownTitle.textContent = `Unknown players (${unknownAttendees.length})`;
+    unknownSection.appendChild(unknownTitle);
+
+    const unknownHint = document.createElement("p");
+    unknownHint.className = "attendance-unknown-hint";
+    unknownHint.textContent =
+      "These sign-ups didn't match any roster member. Pick a roster member to credit, or leave \"don't credit\" for pugs / new members.";
+    unknownSection.appendChild(unknownHint);
+
+    const unknownHeader = document.createElement("div");
+    unknownHeader.className = "attendance-row attendance-row--header";
+    unknownHeader.innerHTML =
+      `<span class="attendance-col attendance-col--name">Sign-up Name</span>` +
+      `<span class="attendance-col attendance-col--class">Class</span>` +
+      `<span class="attendance-col attendance-col--spec">Spec</span>` +
+      `<span class="attendance-col attendance-col--role">Role</span>` +
+      `<span class="attendance-col attendance-col--points">Award</span>` +
+      `<span class="attendance-col attendance-col--award">Credit to</span>` +
+      `<span class="attendance-col attendance-col--check">Attended</span>`;
+    unknownList.appendChild(unknownHeader);
+
+    const rosterSorted = rosterStore.getAll().slice().sort((a, b) => a.name.localeCompare(b.name));
+
+    unknownAttendees.forEach((signUp) => {
+      const row = document.createElement("label");
+      row.className = "attendance-row attendance-row--unknown";
+
+      const name = document.createElement("span");
+      name.className = "attendance-col attendance-col--name";
+      name.textContent = signUp.name;
+
+      const cls = document.createElement("span");
+      cls.className = "attendance-col attendance-col--class";
+      cls.textContent = signUp.className ?? "";
+
+      const spec = document.createElement("span");
+      spec.className = "attendance-col attendance-col--spec";
+      spec.textContent = signUp.specName ?? "";
+
+      const role = document.createElement("span");
+      role.className = "attendance-col attendance-col--role";
+      role.textContent = signUp.roleName ?? "";
+
+      const pointsWrap = document.createElement("span");
+      pointsWrap.className = "attendance-col attendance-col--points";
+      const pointsInput = document.createElement("input");
+      pointsInput.type = "text";
+      pointsInput.className = "attendance-points-input";
+      pointsInput.value = raidSettings.awardForCompletion || "0";
+      pointsInput.addEventListener("click", (e) => e.preventDefault());
+      pointsWrap.appendChild(pointsInput);
+
+      const awardWrap = document.createElement("span");
+      awardWrap.className = "attendance-col attendance-col--award";
+      const awardSelect = document.createElement("select");
+      awardSelect.className = "attendance-award-input";
+      awardSelect.addEventListener("click", (e) => e.preventDefault());
+      const noneOpt = document.createElement("option");
+      noneOpt.value = "";
+      noneOpt.textContent = "(don't credit)";
+      awardSelect.appendChild(noneOpt);
+      for (const member of rosterSorted) {
+        const opt = document.createElement("option");
+        opt.value = member.name;
+        opt.textContent = member.name;
+        awardSelect.appendChild(opt);
+      }
+      awardWrap.appendChild(awardSelect);
+
+      const checkWrap = document.createElement("span");
+      checkWrap.className = "attendance-col attendance-col--check";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = true;
+      checkbox.className = "attendance-checkbox";
+      checkbox.dataset.userId = signUp.userId;
+      checkbox.dataset.name = signUp.name;
+      checkWrap.appendChild(checkbox);
+
+      row.appendChild(name);
+      row.appendChild(cls);
+      row.appendChild(spec);
+      row.appendChild(role);
+      row.appendChild(pointsWrap);
+      row.appendChild(awardWrap);
+      row.appendChild(checkWrap);
+      unknownList.appendChild(row);
+    });
+
+    unknownSection.appendChild(unknownList);
+    container.appendChild(unknownSection);
+  }
 
   container.appendChild(list);
 
@@ -360,7 +440,7 @@ function buildAttendanceForm(event: RaidHelperEvent, eventId: string, raidSettin
   dnsSection.appendChild(dnsList);
   container.appendChild(dnsSection);
 
-  // Footer with spinner and confirm button
+  // Footer with spinner and confirm button (returned separately so the modal can pin it).
   const footer = document.createElement("div");
   footer.className = "attendance-footer";
 
@@ -370,28 +450,66 @@ function buildAttendanceForm(event: RaidHelperEvent, eventId: string, raidSettin
   footerSpinner.innerHTML = '<div class="spinner"></div>';
   footer.appendChild(footerSpinner);
 
+  const footerStatus = document.createElement("span");
+  footerStatus.className = "attendance-footer-status";
+  footer.appendChild(footerStatus);
+
   const confirmBtn = document.createElement("button");
   confirmBtn.className = "btn btn--primary";
   confirmBtn.textContent = "Confirm & Award";
   confirmBtn.addEventListener("click", async () => {
     confirmBtn.disabled = true;
     footerSpinner.style.display = "flex";
+    footerStatus.classList.remove("attendance-footer-status--error");
+    footerStatus.textContent = "";
 
+    let succeeded = false;
     try {
-      await confirmAndAward(list, dnsList, event, eventId);
+      await confirmAndAward([list, unknownList], dnsList, event, eventId, channelId, (msg) => {
+        footerStatus.textContent = msg;
+      });
+      succeeded = true;
+    } catch (err) {
+      footerStatus.textContent = `Failed: ${err instanceof Error ? err.message : String(err)}`;
+      footerStatus.classList.add("attendance-footer-status--error");
     } finally {
       confirmBtn.disabled = false;
       footerSpinner.style.display = "none";
     }
+    if (succeeded) onSuccess();
   });
   footer.appendChild(confirmBtn);
 
-  container.appendChild(footer);
-
-  return container;
+  return { body: container, footer };
 }
 
-async function confirmAndAward(list: HTMLElement, dnsList: HTMLElement, event: RaidHelperEvent, eventId: string): Promise<void> {
+function buildImportHistoryWrite(eventId: string, event: RaidHelperEvent, channelId: string): Promise<void> | null {
+  if (rhImportHistoryStore.hasEvent(eventId)) return null;
+
+  const entry: RhImportHistoryEntry = {
+    eventId,
+    title: event.title ?? "",
+    date: event.date ?? "",
+    time: event.time ?? "",
+    leaderName: event.leaderName ?? "",
+    channelId: channelId ?? "",
+    importedAt: new Date().toISOString(),
+  };
+  rhImportHistoryStore.add(entry);
+
+  const all = rhImportHistoryStore.getAll();
+  const rows = all.map((e) => [e.eventId, e.title, e.date, e.time, e.leaderName, e.channelId, e.importedAt]);
+  return window.api.writeSheet(RH_IMPORT_HISTORY_SHEET, [RH_IMPORT_HISTORY_HEADERS, ...rows]);
+}
+
+async function confirmAndAward(
+  attendanceLists: HTMLElement[],
+  dnsList: HTMLElement,
+  event: RaidHelperEvent,
+  eventId: string,
+  channelId: string,
+  onProgress: (msg: string) => void = () => {},
+): Promise<void> {
   const roster = rosterStore.getAll();
   const rosterByName = new Map<string, RosterEntry>();
   for (const entry of roster) {
@@ -399,20 +517,27 @@ async function confirmAndAward(list: HTMLElement, dnsList: HTMLElement, event: R
   }
 
   const notFound: string[] = [];
-  const rows = Array.from(list.querySelectorAll(".attendance-row:not(.attendance-row--header)"));
+  const rows: Element[] = [];
+  for (const l of attendanceLists) {
+    rows.push(...Array.from(l.querySelectorAll(".attendance-row:not(.attendance-row--header)")));
+  }
 
   for (const row of rows) {
     const checkbox = row.querySelector(".attendance-checkbox") as HTMLInputElement | null;
     if (!checkbox?.checked) continue;
 
-    const awardToInput = row.querySelector(".attendance-award-input") as HTMLInputElement | null;
+    const awardToInput = row.querySelector(".attendance-award-input") as HTMLInputElement | HTMLSelectElement | null;
     const pointsInput = row.querySelector(".attendance-points-input") as HTMLInputElement | null;
     const awardTo = awardToInput?.value.trim() ?? "";
     const points = parseFloat(pointsInput?.value ?? "0") || 0;
 
     if (!awardTo) {
-      const signUpName = row.querySelector(".attendance-col--name")?.textContent ?? "Unknown";
-      notFound.push(signUpName);
+      // Unknown rows where the user explicitly chose "don't credit" are intentional
+      // (pug / new member) — skip silently. Empty matched rows still warn.
+      if (!row.classList.contains("attendance-row--unknown")) {
+        const signUpName = row.querySelector(".attendance-col--name")?.textContent ?? "Unknown";
+        notFound.push(signUpName);
+      }
       continue;
     }
 
@@ -453,14 +578,12 @@ async function confirmAndAward(list: HTMLElement, dnsList: HTMLElement, event: R
     rosterEntry.rollModifier = String(newMod);
   }
 
-  // Save updated roster
+  // Build payloads for all sheet writes up front so they can run in parallel.
   rosterStore.replaceAll(roster);
   const rosterRows = roster.map((e) => [
     e.name, e.raidHelperName, e.rank, e.class, e.ms, e.os, e.main, e.profession1, e.profession2, e.rollModifier, e.notes,
   ]);
-  await window.api.writeSheet(ROSTER_SHEET, [ROSTER_HEADERS, ...rosterRows]);
 
-  // Save attendance entry
   const link = `https://raid-helper.dev/event/${eventId}`;
   const attendanceEntry: AttendanceEntry = {
     date: event.date,
@@ -472,17 +595,71 @@ async function confirmAndAward(list: HTMLElement, dnsList: HTMLElement, event: R
 
   const allEntries = attendanceStore.getAll();
   const attendanceRows = allEntries.map((e) => [e.date, e.eventName, e.link, e.roster]);
-  await window.api.writeSheet(ATTENDANCE_SHEET, [ATTENDANCE_HEADERS, ...attendanceRows]);
 
-  // Show result
+  const importHistoryWrite = buildImportHistoryWrite(eventId, event, channelId);
+
+  onProgress("Saving roster, attendance, and history...");
+
+  // Each writeSheet does its own auth + clear + PUT, so running them in parallel
+  // cuts wall time by ~3x. Roster + attendance must succeed; history is best-effort
+  // because the tab may not exist yet on first use.
+  const [rosterResult, attendanceResult, historyResult] = await Promise.allSettled([
+    window.api.writeSheet(ROSTER_SHEET, [ROSTER_HEADERS, ...rosterRows]),
+    window.api.writeSheet(ATTENDANCE_SHEET, [ATTENDANCE_HEADERS, ...attendanceRows]),
+    importHistoryWrite ?? Promise.resolve(),
+  ]);
+
+  if (rosterResult.status === "rejected") throw rosterResult.reason;
+  if (attendanceResult.status === "rejected") throw attendanceResult.reason;
+  if (historyResult.status === "rejected") {
+    console.error("Failed to record rh-import-history:", historyResult.reason);
+  }
+
+  onProgress("Done.");
+
   if (notFound.length > 0) {
     alert(
       `Awards saved, but the following names were not found in the roster:\n\n` +
       notFound.map((n) => `  - ${n}`).join("\n")
     );
-  } else {
-    alert("All attendance awards have been applied and saved.");
   }
+}
+
+async function deleteHistoryEntry(index: number): Promise<void> {
+  const entry = attendanceStore.getAll()[index];
+  if (!entry) return;
+
+  const ok = confirm(`Delete attendance entry "${entry.eventName}" (${entry.date})?\n\nThis cannot be undone.`);
+  if (!ok) return;
+
+  attendanceStore.removeAt(index);
+
+  const remaining = attendanceStore.getAll();
+  const rows = remaining.map((e) => [e.date, e.eventName, e.link, e.roster]);
+  try {
+    await window.api.writeSheet(ATTENDANCE_SHEET, [ATTENDANCE_HEADERS, ...rows]);
+  } catch (err) {
+    attendanceStore.add(entry);
+    alert(`Failed to delete: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
+function getEntrySortKey(entry: AttendanceEntry, fallbackIndex: number): number {
+  // Prefer the event's startTime from the stored roster JSON since the `date`
+  // field is a raw display string with unpredictable format. Fall back to a
+  // best-effort Date.parse, then to insertion order so unparseable entries keep
+  // a stable place at the bottom.
+  try {
+    const parsed = JSON.parse(entry.roster);
+    if (typeof parsed.startTime === "number" && parsed.startTime > 0) {
+      return parsed.startTime;
+    }
+  } catch { /* not JSON, fall through */ }
+
+  const dateMs = Date.parse(entry.date);
+  if (!isNaN(dateMs)) return Math.floor(dateMs / 1000);
+
+  return fallbackIndex;
 }
 
 function buildHistoryList(container: HTMLElement): void {
@@ -490,6 +667,10 @@ function buildHistoryList(container: HTMLElement): void {
 
   const entries = attendanceStore.getAll();
   if (entries.length === 0) return;
+
+  const sorted = entries
+    .map((entry, originalIndex) => ({ entry, originalIndex, sortKey: getEntrySortKey(entry, originalIndex) }))
+    .sort((a, b) => b.sortKey - a.sortKey);
 
   const title = document.createElement("h3");
   title.className = "attendance-history-title";
@@ -504,10 +685,11 @@ function buildHistoryList(container: HTMLElement): void {
   header.innerHTML =
     `<span class="attendance-history-col attendance-history-col--date">Date</span>` +
     `<span class="attendance-history-col attendance-history-col--name">Event Name</span>` +
-    `<span class="attendance-history-col attendance-history-col--link">Link</span>`;
+    `<span class="attendance-history-col attendance-history-col--link">Link</span>` +
+    `<span class="attendance-history-col attendance-history-col--actions"></span>`;
   table.appendChild(header);
 
-  for (const entry of entries) {
+  sorted.forEach(({ entry, originalIndex }) => {
     const row = document.createElement("div");
     row.className = "attendance-history-row";
 
@@ -532,13 +714,87 @@ function buildHistoryList(container: HTMLElement): void {
     });
     linkCol.appendChild(anchor);
 
+    const actions = document.createElement("span");
+    actions.className = "attendance-history-col attendance-history-col--actions";
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "attendance-history-delete";
+    deleteBtn.type = "button";
+    deleteBtn.title = "Delete entry";
+    deleteBtn.textContent = "×";
+    deleteBtn.addEventListener("click", async () => {
+      deleteBtn.disabled = true;
+      try {
+        await deleteHistoryEntry(originalIndex);
+      } finally {
+        deleteBtn.disabled = false;
+      }
+    });
+    actions.appendChild(deleteBtn);
+
     row.appendChild(date);
     row.appendChild(name);
     row.appendChild(linkCol);
+    row.appendChild(actions);
     table.appendChild(row);
-  }
+  });
 
   container.appendChild(table);
+}
+
+function showAttendanceFormModal(eventId: string, raidSettings: RaidSettingsEntry, channelId: string): void {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+
+  const modal = document.createElement("div");
+  modal.className = "modal modal--xwide";
+
+  const titleRow = document.createElement("div");
+  titleRow.className = "modal__header";
+
+  const title = document.createElement("h3");
+  title.className = "modal__title";
+  title.textContent = "New Attendance Entry";
+
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "modal__close";
+  closeBtn.type = "button";
+  closeBtn.textContent = "×";
+  closeBtn.addEventListener("click", () => overlay.remove());
+
+  titleRow.appendChild(title);
+  titleRow.appendChild(closeBtn);
+  modal.appendChild(titleRow);
+
+  const body = document.createElement("div");
+  body.className = "modal__body";
+  modal.appendChild(body);
+
+  const spinner = document.createElement("div");
+  spinner.className = "attendance-loading";
+  spinner.innerHTML = '<div class="spinner"></div><span>Loading event data...</span>';
+  body.appendChild(spinner);
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  window.api.fetchRaidHelperEvent(eventId).then((event) => {
+    body.innerHTML = "";
+    const { body: formBody, footer } = buildAttendanceForm(
+      event,
+      eventId,
+      raidSettings,
+      channelId,
+      () => overlay.remove(),
+    );
+    body.appendChild(formBody);
+    modal.appendChild(footer);
+  }).catch((err) => {
+    body.innerHTML = "";
+    const errEl = document.createElement("div");
+    errEl.className = "attendance-error";
+    errEl.textContent = `Failed to load event: ${err instanceof Error ? err.message : err}`;
+    body.appendChild(errEl);
+  });
 }
 
 export function createAttendancePage(): HTMLElement {
@@ -555,10 +811,6 @@ export function createAttendancePage(): HTMLElement {
   toolbar.appendChild(newEntryBtn);
   page.appendChild(toolbar);
 
-  const content = document.createElement("div");
-  content.className = "attendance-content";
-  page.appendChild(content);
-
   const historyContainer = document.createElement("div");
   historyContainer.className = "attendance-history-container";
   page.appendChild(historyContainer);
@@ -568,25 +820,10 @@ export function createAttendancePage(): HTMLElement {
   attendanceStore.subscribe(() => buildHistoryList(historyContainer));
 
   newEntryBtn.addEventListener("click", () => {
-    showUrlPrompt(async (eventId, raidSettings) => {
-      content.innerHTML = "";
-
-      const spinner = document.createElement("div");
-      spinner.className = "attendance-loading";
-      spinner.innerHTML = '<div class="spinner"></div><span>Loading event data...</span>';
-      content.appendChild(spinner);
-
-      try {
-        const event = await window.api.fetchRaidHelperEvent(eventId);
-        content.innerHTML = "";
-        content.appendChild(buildAttendanceForm(event, eventId, raidSettings));
-      } catch (err) {
-        content.innerHTML = "";
-        const errEl = document.createElement("div");
-        errEl.className = "attendance-error";
-        errEl.textContent = `Failed to load event: ${err instanceof Error ? err.message : err}`;
-        content.appendChild(errEl);
-      }
+    showEventPicker((pickedEvent, raidSettings) => {
+      const eventId = String(pickedEvent.id ?? "");
+      const channelId = String(pickedEvent.channelId ?? "");
+      showAttendanceFormModal(eventId, raidSettings, channelId);
     });
   });
 

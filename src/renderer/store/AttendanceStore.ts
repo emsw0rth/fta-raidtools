@@ -22,6 +22,13 @@ class AttendanceStore {
     this.notify();
   }
 
+  removeAt(index: number): void {
+    if (index < 0 || index >= this.entries.length) return;
+    this.entries.splice(index, 1);
+    this.persist();
+    this.notify();
+  }
+
   replaceAll(entries: AttendanceEntry[]): void {
     this.entries = entries;
     this.persist();

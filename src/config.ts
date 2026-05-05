@@ -5,11 +5,17 @@ import * as path from "path";
 export interface AppConfig {
   googleSheetUrl: string;
   serviceAccountKeyPath: string;
+  raidHelperServerId: string;
+  raidHelperApiKey: string;
+  raidHelperEventStartDate: string;
 }
 
 const defaults: AppConfig = {
   googleSheetUrl: "",
   serviceAccountKeyPath: "",
+  raidHelperServerId: "",
+  raidHelperApiKey: "",
+  raidHelperEventStartDate: "2026-02-04",
 };
 
 function getConfigPath(): string {

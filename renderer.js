@@ -59507,6 +59507,12 @@ If you are trying to annotate ${containerName} with application data, use the '$
       this.persist();
       this.notify();
     }
+    removeAt(index) {
+      if (index < 0 || index >= this.entries.length) return;
+      this.entries.splice(index, 1);
+      this.persist();
+      this.notify();
+    }
     replaceAll(entries) {
       this.entries = entries;
       this.persist();
@@ -59538,11 +59544,215 @@ If you are trying to annotate ${containerName} with application data, use the '$
   };
   var attendanceStore = new AttendanceStore();
 
+  // src/renderer/store/RhImportHistoryStore.ts
+  var STORAGE_KEY6 = "fta-rh-import-history";
+  var RhImportHistoryStore = class {
+    entries = [];
+    listeners = /* @__PURE__ */ new Set();
+    constructor() {
+      this.load();
+    }
+    getAll() {
+      return [...this.entries];
+    }
+    hasEvent(eventId) {
+      return this.entries.some((e) => e.eventId === eventId);
+    }
+    add(entry) {
+      this.entries.push(entry);
+      this.persist();
+      this.notify();
+    }
+    replaceAll(entries) {
+      this.entries = entries;
+      this.persist();
+      this.notify();
+    }
+    subscribe(listener) {
+      this.listeners.add(listener);
+      return () => this.listeners.delete(listener);
+    }
+    notify() {
+      this.listeners.forEach((fn) => fn());
+    }
+    persist() {
+      try {
+        localStorage.setItem(STORAGE_KEY6, JSON.stringify(this.entries));
+      } catch {
+      }
+    }
+    load() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY6);
+        if (raw) {
+          this.entries = JSON.parse(raw);
+        }
+      } catch {
+        this.entries = [];
+      }
+    }
+  };
+  var rhImportHistoryStore = new RhImportHistoryStore();
+
+  // src/renderer/components/molecules/RhEventPicker.ts
+  function pickEpochSeconds(event) {
+    const candidates = [event.closingTime, event.endTime, event.startTime];
+    for (const candidate of candidates) {
+      if (typeof candidate === "number" && candidate > 0) {
+        return candidate > 1e12 ? Math.floor(candidate / 1e3) : Math.floor(candidate);
+      }
+    }
+    return null;
+  }
+  function formatDateTime(epochSec) {
+    if (!epochSec) return "\u2014";
+    const d = new Date(epochSec * 1e3);
+    if (isNaN(d.getTime())) return "\u2014";
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const min = String(d.getMinutes()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+  }
+  function normalize(events) {
+    const nowSec = Math.floor(Date.now() / 1e3);
+    return events.map((raw) => {
+      const startEpochSec = pickEpochSeconds(raw);
+      return {
+        raw,
+        id: String(raw.id ?? ""),
+        title: String(raw.title ?? "(untitled event)"),
+        leaderName: String(raw.leaderName ?? ""),
+        startEpochSec,
+        isPast: startEpochSec !== null && startEpochSec < nowSec,
+        alreadyImported: rhImportHistoryStore.hasEvent(String(raw.id ?? ""))
+      };
+    });
+  }
+  function createRhEventPicker(opts) {
+    const container = document.createElement("div");
+    container.className = "rh-picker";
+    const controls = document.createElement("div");
+    controls.className = "rh-picker__controls";
+    const searchInput = document.createElement("input");
+    searchInput.type = "text";
+    searchInput.className = "rh-picker__search";
+    searchInput.placeholder = "Filter by event name...";
+    controls.appendChild(searchInput);
+    const toggleLabel = document.createElement("label");
+    toggleLabel.className = "rh-picker__toggle";
+    const toggleCb = document.createElement("input");
+    toggleCb.type = "checkbox";
+    toggleCb.checked = false;
+    const toggleText = document.createElement("span");
+    toggleText.textContent = "Show already-imported";
+    toggleLabel.appendChild(toggleCb);
+    toggleLabel.appendChild(toggleText);
+    controls.appendChild(toggleLabel);
+    const refreshBtn = document.createElement("button");
+    refreshBtn.className = "btn rh-picker__refresh";
+    refreshBtn.type = "button";
+    refreshBtn.textContent = "Refresh";
+    controls.appendChild(refreshBtn);
+    container.appendChild(controls);
+    const status = document.createElement("div");
+    status.className = "rh-picker__status";
+    container.appendChild(status);
+    const listWrap = document.createElement("div");
+    listWrap.className = "rh-picker__list";
+    container.appendChild(listWrap);
+    let allEvents = [];
+    function setStatus(text, kind = "info") {
+      status.textContent = text;
+      status.className = `rh-picker__status rh-picker__status--${kind}`;
+      status.style.display = text ? "flex" : "none";
+    }
+    function render() {
+      listWrap.innerHTML = "";
+      const showImported = toggleCb.checked;
+      const search = searchInput.value.trim().toLowerCase();
+      const visible = allEvents.filter((e) => e.isPast).filter((e) => showImported || !e.alreadyImported).filter((e) => !search || e.title.toLowerCase().includes(search)).sort((a, b) => (b.startEpochSec ?? 0) - (a.startEpochSec ?? 0));
+      if (visible.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "rh-picker__empty";
+        if (search) {
+          empty.textContent = `No events match "${searchInput.value.trim()}".`;
+        } else {
+          empty.textContent = allEvents.some((e) => e.isPast) ? "All past events have already been imported." : "No past events found on this server.";
+        }
+        listWrap.appendChild(empty);
+        return;
+      }
+      for (const ev of visible) {
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = "rh-picker__row";
+        if (ev.alreadyImported) row.classList.add("rh-picker__row--imported");
+        const dt = document.createElement("span");
+        dt.className = "rh-picker__col rh-picker__col--date";
+        dt.textContent = formatDateTime(ev.startEpochSec);
+        const title = document.createElement("span");
+        title.className = "rh-picker__col rh-picker__col--title";
+        title.textContent = ev.title;
+        const leader = document.createElement("span");
+        leader.className = "rh-picker__col rh-picker__col--leader";
+        leader.textContent = ev.leaderName;
+        const badge = document.createElement("span");
+        badge.className = "rh-picker__col rh-picker__col--badge";
+        if (ev.alreadyImported) {
+          const tag = document.createElement("span");
+          tag.className = "rh-picker__badge";
+          tag.textContent = "Imported";
+          badge.appendChild(tag);
+        }
+        row.appendChild(dt);
+        row.appendChild(title);
+        row.appendChild(leader);
+        row.appendChild(badge);
+        row.addEventListener("click", () => opts.onSelect(ev.raw));
+        listWrap.appendChild(row);
+      }
+    }
+    async function load() {
+      listWrap.innerHTML = "";
+      setStatus("");
+      const config = await window.api.loadConfig();
+      if (!config.raidHelperServerId || !config.raidHelperApiKey) {
+        setStatus("Configure the Raid Helper server ID and API key in Settings.", "error");
+        return;
+      }
+      const loading = document.createElement("div");
+      loading.className = "rh-picker__loading";
+      loading.innerHTML = '<div class="spinner"></div><span>Loading events...</span>';
+      listWrap.appendChild(loading);
+      try {
+        const response = await window.api.fetchRaidHelperServerEvents(1);
+        const events = response?.postedEvents ?? [];
+        allEvents = normalize(events);
+        render();
+      } catch (err) {
+        listWrap.innerHTML = "";
+        const msg = err instanceof Error ? err.message : String(err);
+        setStatus(`Failed to load events: ${msg}`, "error");
+      }
+    }
+    toggleCb.addEventListener("change", render);
+    searchInput.addEventListener("input", render);
+    refreshBtn.addEventListener("click", () => {
+      void load();
+    });
+    void load();
+    return container;
+  }
+
   // src/renderer/components/pages/AttendancePage.ts
   var ROSTER_SHEET = "roster";
   var ROSTER_HEADERS2 = ["Name", "Raid-Helper name", "Rank", "Class", "MS", "OS", "Main", "Profession 1", "Profession 2", "Roll Modifier", "Notes"];
   var ATTENDANCE_SHEET = "attendance";
   var ATTENDANCE_HEADERS = ["Date", "Event Name", "Link", "Roster"];
+  var RH_IMPORT_HISTORY_SHEET = "rh-import-history";
+  var RH_IMPORT_HISTORY_HEADERS = ["Event ID", "Title", "Date", "Time", "Leader", "Channel ID", "Imported At"];
   function findRosterName(signUpName) {
     const roster = rosterStore.getAll();
     const lower = signUpName.toLowerCase();
@@ -59551,14 +59761,6 @@ If you are trying to annotate ${containerName} with application data, use the '$
     const byName = roster.find((r) => r.name.toLowerCase() === lower);
     if (byName) return byName.name;
     return "";
-  }
-  function extractEventId(input) {
-    const trimmed = input.trim();
-    const apiMatch = trimmed.match(/raid-helper\.(?:dev|xyz)\/api\/v2\/events\/(\d+)/);
-    if (apiMatch) return apiMatch[1];
-    const eventMatch = trimmed.match(/raid-helper\.(?:dev|xyz)\/event\/(\d+)/);
-    if (eventMatch) return eventMatch[1];
-    return null;
   }
   function roleSort(roleName) {
     switch (roleName) {
@@ -59574,11 +59776,11 @@ If you are trying to annotate ${containerName} with application data, use the '$
         return 4;
     }
   }
-  function showUrlPrompt(onSubmit) {
+  function showEventPicker(onSubmit) {
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
     const modal = document.createElement("div");
-    modal.className = "modal";
+    modal.className = "modal modal--wide";
     const title = document.createElement("h3");
     title.className = "modal__title";
     title.textContent = "New Attendance Entry";
@@ -59606,7 +59808,7 @@ If you are trying to annotate ${containerName} with application data, use the '$
     const raidError = document.createElement("div");
     raidError.className = "modal__error";
     raidError.style.display = "none";
-    raidError.textContent = "Please select a raid.";
+    raidError.textContent = "Please select a raid before picking an event.";
     raidSelect.addEventListener("change", () => {
       raidError.style.display = "none";
     });
@@ -59614,53 +59816,30 @@ If you are trying to annotate ${containerName} with application data, use the '$
     raidField.appendChild(raidSelect);
     raidField.appendChild(raidError);
     modal.appendChild(raidField);
-    const field = document.createElement("div");
-    field.className = "modal__field";
-    const label = document.createElement("label");
-    label.className = "modal__label";
-    label.textContent = "Raid Helper Event URL";
-    const input = document.createElement("input");
-    input.type = "text";
-    input.className = "modal__input";
-    input.placeholder = "https://raid-helper.dev/event/...";
-    const error = document.createElement("div");
-    error.className = "attendance-url-error";
-    error.style.display = "none";
-    error.textContent = "Invalid URL. Use a raid-helper.dev or raid-helper.xyz event or API URL.";
-    field.appendChild(label);
-    field.appendChild(input);
-    field.appendChild(error);
-    modal.appendChild(field);
+    const pickerLabel = document.createElement("label");
+    pickerLabel.className = "modal__label";
+    pickerLabel.textContent = "Select an event";
+    modal.appendChild(pickerLabel);
+    const picker = createRhEventPicker({
+      onSelect: (ev) => {
+        if (!raidSelect.value) {
+          raidError.style.display = "block";
+          raidSelect.focus();
+          return;
+        }
+        const selectedRaid = raids.find((r) => r.id === raidSelect.value);
+        if (!selectedRaid) return;
+        overlay.remove();
+        onSubmit(ev, selectedRaid);
+      }
+    });
+    modal.appendChild(picker);
     const actions = document.createElement("div");
     actions.className = "modal__actions";
-    const submitBtn = document.createElement("button");
-    submitBtn.className = "btn btn--primary";
-    submitBtn.textContent = "Load Event";
-    submitBtn.addEventListener("click", () => {
-      if (!raidSelect.value) {
-        raidError.style.display = "block";
-        raidSelect.focus();
-        return;
-      }
-      const eventId = extractEventId(input.value);
-      if (!eventId) {
-        error.style.display = "block";
-        input.focus();
-        return;
-      }
-      const selectedRaid = raids.find((r) => r.id === raidSelect.value);
-      if (!selectedRaid) return;
-      overlay.remove();
-      onSubmit(eventId, selectedRaid);
-    });
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") submitBtn.click();
-    });
     const cancelBtn = document.createElement("button");
     cancelBtn.className = "btn";
     cancelBtn.textContent = "Cancel";
     cancelBtn.addEventListener("click", () => overlay.remove());
-    actions.appendChild(submitBtn);
     actions.appendChild(cancelBtn);
     modal.appendChild(actions);
     overlay.appendChild(modal);
@@ -59670,7 +59849,7 @@ If you are trying to annotate ${containerName} with application data, use the '$
     document.body.appendChild(overlay);
     raidSelect.focus();
   }
-  function buildAttendanceForm(event, eventId, raidSettings) {
+  function buildAttendanceForm(event, eventId, raidSettings, channelId, onSuccess) {
     const container = document.createElement("div");
     container.className = "attendance-form";
     const header = document.createElement("div");
@@ -59684,7 +59863,9 @@ If you are trying to annotate ${containerName} with application data, use the '$
     header.appendChild(titleEl);
     header.appendChild(meta);
     container.appendChild(header);
-    const attendees = event.signUps.filter((s) => s.className !== "Absence").sort((a, b) => roleSort(a.roleName) - roleSort(b.roleName));
+    const allAttendees = event.signUps.filter((s) => s.className !== "Absence").sort((a, b) => roleSort(a.roleName) - roleSort(b.roleName));
+    const attendees = allAttendees.filter((s) => findRosterName(s.name) !== "");
+    const unknownAttendees = allAttendees.filter((s) => findRosterName(s.name) === "");
     const absences = event.signUps.filter((s) => s.className === "Absence");
     const list = document.createElement("div");
     list.className = "attendance-list";
@@ -59741,6 +59922,84 @@ If you are trying to annotate ${containerName} with application data, use the '$
       row.appendChild(checkWrap);
       list.appendChild(row);
     });
+    const unknownList = document.createElement("div");
+    unknownList.className = "attendance-list";
+    if (unknownAttendees.length > 0) {
+      const unknownSection = document.createElement("div");
+      unknownSection.className = "attendance-absences attendance-absences--top";
+      const unknownTitle = document.createElement("h3");
+      unknownTitle.className = "attendance-absences-title";
+      unknownTitle.textContent = `Unknown players (${unknownAttendees.length})`;
+      unknownSection.appendChild(unknownTitle);
+      const unknownHint = document.createElement("p");
+      unknownHint.className = "attendance-unknown-hint";
+      unknownHint.textContent = `These sign-ups didn't match any roster member. Pick a roster member to credit, or leave "don't credit" for pugs / new members.`;
+      unknownSection.appendChild(unknownHint);
+      const unknownHeader = document.createElement("div");
+      unknownHeader.className = "attendance-row attendance-row--header";
+      unknownHeader.innerHTML = `<span class="attendance-col attendance-col--name">Sign-up Name</span><span class="attendance-col attendance-col--class">Class</span><span class="attendance-col attendance-col--spec">Spec</span><span class="attendance-col attendance-col--role">Role</span><span class="attendance-col attendance-col--points">Award</span><span class="attendance-col attendance-col--award">Credit to</span><span class="attendance-col attendance-col--check">Attended</span>`;
+      unknownList.appendChild(unknownHeader);
+      const rosterSorted = rosterStore.getAll().slice().sort((a, b) => a.name.localeCompare(b.name));
+      unknownAttendees.forEach((signUp) => {
+        const row = document.createElement("label");
+        row.className = "attendance-row attendance-row--unknown";
+        const name = document.createElement("span");
+        name.className = "attendance-col attendance-col--name";
+        name.textContent = signUp.name;
+        const cls = document.createElement("span");
+        cls.className = "attendance-col attendance-col--class";
+        cls.textContent = signUp.className ?? "";
+        const spec = document.createElement("span");
+        spec.className = "attendance-col attendance-col--spec";
+        spec.textContent = signUp.specName ?? "";
+        const role = document.createElement("span");
+        role.className = "attendance-col attendance-col--role";
+        role.textContent = signUp.roleName ?? "";
+        const pointsWrap = document.createElement("span");
+        pointsWrap.className = "attendance-col attendance-col--points";
+        const pointsInput = document.createElement("input");
+        pointsInput.type = "text";
+        pointsInput.className = "attendance-points-input";
+        pointsInput.value = raidSettings.awardForCompletion || "0";
+        pointsInput.addEventListener("click", (e) => e.preventDefault());
+        pointsWrap.appendChild(pointsInput);
+        const awardWrap = document.createElement("span");
+        awardWrap.className = "attendance-col attendance-col--award";
+        const awardSelect = document.createElement("select");
+        awardSelect.className = "attendance-award-input";
+        awardSelect.addEventListener("click", (e) => e.preventDefault());
+        const noneOpt = document.createElement("option");
+        noneOpt.value = "";
+        noneOpt.textContent = "(don't credit)";
+        awardSelect.appendChild(noneOpt);
+        for (const member of rosterSorted) {
+          const opt = document.createElement("option");
+          opt.value = member.name;
+          opt.textContent = member.name;
+          awardSelect.appendChild(opt);
+        }
+        awardWrap.appendChild(awardSelect);
+        const checkWrap = document.createElement("span");
+        checkWrap.className = "attendance-col attendance-col--check";
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = true;
+        checkbox.className = "attendance-checkbox";
+        checkbox.dataset.userId = signUp.userId;
+        checkbox.dataset.name = signUp.name;
+        checkWrap.appendChild(checkbox);
+        row.appendChild(name);
+        row.appendChild(cls);
+        row.appendChild(spec);
+        row.appendChild(role);
+        row.appendChild(pointsWrap);
+        row.appendChild(awardWrap);
+        row.appendChild(checkWrap);
+        unknownList.appendChild(row);
+      });
+      unknownSection.appendChild(unknownList);
+      container.appendChild(unknownSection);
+    }
     container.appendChild(list);
     if (absences.length > 0) {
       const absSection = document.createElement("div");
@@ -59811,31 +60070,63 @@ If you are trying to annotate ${containerName} with application data, use the '$
     footerSpinner.style.display = "none";
     footerSpinner.innerHTML = '<div class="spinner"></div>';
     footer.appendChild(footerSpinner);
+    const footerStatus = document.createElement("span");
+    footerStatus.className = "attendance-footer-status";
+    footer.appendChild(footerStatus);
     const confirmBtn = document.createElement("button");
     confirmBtn.className = "btn btn--primary";
     confirmBtn.textContent = "Confirm & Award";
     confirmBtn.addEventListener("click", async () => {
       confirmBtn.disabled = true;
       footerSpinner.style.display = "flex";
+      footerStatus.classList.remove("attendance-footer-status--error");
+      footerStatus.textContent = "";
+      let succeeded = false;
       try {
-        await confirmAndAward(list, dnsList, event, eventId);
+        await confirmAndAward([list, unknownList], dnsList, event, eventId, channelId, (msg) => {
+          footerStatus.textContent = msg;
+        });
+        succeeded = true;
+      } catch (err) {
+        footerStatus.textContent = `Failed: ${err instanceof Error ? err.message : String(err)}`;
+        footerStatus.classList.add("attendance-footer-status--error");
       } finally {
         confirmBtn.disabled = false;
         footerSpinner.style.display = "none";
       }
+      if (succeeded) onSuccess();
     });
     footer.appendChild(confirmBtn);
-    container.appendChild(footer);
-    return container;
+    return { body: container, footer };
   }
-  async function confirmAndAward(list, dnsList, event, eventId) {
+  function buildImportHistoryWrite(eventId, event, channelId) {
+    if (rhImportHistoryStore.hasEvent(eventId)) return null;
+    const entry = {
+      eventId,
+      title: event.title ?? "",
+      date: event.date ?? "",
+      time: event.time ?? "",
+      leaderName: event.leaderName ?? "",
+      channelId: channelId ?? "",
+      importedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    rhImportHistoryStore.add(entry);
+    const all = rhImportHistoryStore.getAll();
+    const rows = all.map((e) => [e.eventId, e.title, e.date, e.time, e.leaderName, e.channelId, e.importedAt]);
+    return window.api.writeSheet(RH_IMPORT_HISTORY_SHEET, [RH_IMPORT_HISTORY_HEADERS, ...rows]);
+  }
+  async function confirmAndAward(attendanceLists, dnsList, event, eventId, channelId, onProgress = () => {
+  }) {
     const roster = rosterStore.getAll();
     const rosterByName = /* @__PURE__ */ new Map();
     for (const entry of roster) {
       rosterByName.set(entry.name.toLowerCase(), entry);
     }
     const notFound = [];
-    const rows = Array.from(list.querySelectorAll(".attendance-row:not(.attendance-row--header)"));
+    const rows = [];
+    for (const l of attendanceLists) {
+      rows.push(...Array.from(l.querySelectorAll(".attendance-row:not(.attendance-row--header)")));
+    }
     for (const row of rows) {
       const checkbox = row.querySelector(".attendance-checkbox");
       if (!checkbox?.checked) continue;
@@ -59844,8 +60135,10 @@ If you are trying to annotate ${containerName} with application data, use the '$
       const awardTo = awardToInput?.value.trim() ?? "";
       const points = parseFloat(pointsInput?.value ?? "0") || 0;
       if (!awardTo) {
-        const signUpName = row.querySelector(".attendance-col--name")?.textContent ?? "Unknown";
-        notFound.push(signUpName);
+        if (!row.classList.contains("attendance-row--unknown")) {
+          const signUpName = row.querySelector(".attendance-col--name")?.textContent ?? "Unknown";
+          notFound.push(signUpName);
+        }
         continue;
       }
       const rosterEntry = rosterByName.get(awardTo.toLowerCase());
@@ -59892,7 +60185,6 @@ If you are trying to annotate ${containerName} with application data, use the '$
       e.rollModifier,
       e.notes
     ]);
-    await window.api.writeSheet(ROSTER_SHEET, [ROSTER_HEADERS2, ...rosterRows]);
     const link = `https://raid-helper.dev/event/${eventId}`;
     const attendanceEntry = {
       date: event.date,
@@ -59903,21 +60195,61 @@ If you are trying to annotate ${containerName} with application data, use the '$
     attendanceStore.add(attendanceEntry);
     const allEntries = attendanceStore.getAll();
     const attendanceRows = allEntries.map((e) => [e.date, e.eventName, e.link, e.roster]);
-    await window.api.writeSheet(ATTENDANCE_SHEET, [ATTENDANCE_HEADERS, ...attendanceRows]);
+    const importHistoryWrite = buildImportHistoryWrite(eventId, event, channelId);
+    onProgress("Saving roster, attendance, and history...");
+    const [rosterResult, attendanceResult, historyResult] = await Promise.allSettled([
+      window.api.writeSheet(ROSTER_SHEET, [ROSTER_HEADERS2, ...rosterRows]),
+      window.api.writeSheet(ATTENDANCE_SHEET, [ATTENDANCE_HEADERS, ...attendanceRows]),
+      importHistoryWrite ?? Promise.resolve()
+    ]);
+    if (rosterResult.status === "rejected") throw rosterResult.reason;
+    if (attendanceResult.status === "rejected") throw attendanceResult.reason;
+    if (historyResult.status === "rejected") {
+      console.error("Failed to record rh-import-history:", historyResult.reason);
+    }
+    onProgress("Done.");
     if (notFound.length > 0) {
       alert(
         `Awards saved, but the following names were not found in the roster:
 
 ` + notFound.map((n) => `  - ${n}`).join("\n")
       );
-    } else {
-      alert("All attendance awards have been applied and saved.");
     }
+  }
+  async function deleteHistoryEntry(index) {
+    const entry = attendanceStore.getAll()[index];
+    if (!entry) return;
+    const ok = confirm(`Delete attendance entry "${entry.eventName}" (${entry.date})?
+
+This cannot be undone.`);
+    if (!ok) return;
+    attendanceStore.removeAt(index);
+    const remaining = attendanceStore.getAll();
+    const rows = remaining.map((e) => [e.date, e.eventName, e.link, e.roster]);
+    try {
+      await window.api.writeSheet(ATTENDANCE_SHEET, [ATTENDANCE_HEADERS, ...rows]);
+    } catch (err) {
+      attendanceStore.add(entry);
+      alert(`Failed to delete: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+  function getEntrySortKey(entry, fallbackIndex) {
+    try {
+      const parsed = JSON.parse(entry.roster);
+      if (typeof parsed.startTime === "number" && parsed.startTime > 0) {
+        return parsed.startTime;
+      }
+    } catch {
+    }
+    const dateMs = Date.parse(entry.date);
+    if (!isNaN(dateMs)) return Math.floor(dateMs / 1e3);
+    return fallbackIndex;
   }
   function buildHistoryList(container) {
     container.innerHTML = "";
     const entries = attendanceStore.getAll();
     if (entries.length === 0) return;
+    const sorted = entries.map((entry, originalIndex) => ({ entry, originalIndex, sortKey: getEntrySortKey(entry, originalIndex) })).sort((a, b) => b.sortKey - a.sortKey);
     const title = document.createElement("h3");
     title.className = "attendance-history-title";
     title.textContent = "Previous Events";
@@ -59926,9 +60258,9 @@ If you are trying to annotate ${containerName} with application data, use the '$
     table.className = "attendance-history";
     const header = document.createElement("div");
     header.className = "attendance-history-row attendance-history-row--header";
-    header.innerHTML = `<span class="attendance-history-col attendance-history-col--date">Date</span><span class="attendance-history-col attendance-history-col--name">Event Name</span><span class="attendance-history-col attendance-history-col--link">Link</span>`;
+    header.innerHTML = `<span class="attendance-history-col attendance-history-col--date">Date</span><span class="attendance-history-col attendance-history-col--name">Event Name</span><span class="attendance-history-col attendance-history-col--link">Link</span><span class="attendance-history-col attendance-history-col--actions"></span>`;
     table.appendChild(header);
-    for (const entry of entries) {
+    sorted.forEach(({ entry, originalIndex }) => {
       const row = document.createElement("div");
       row.className = "attendance-history-row";
       const date = document.createElement("span");
@@ -59949,12 +60281,75 @@ If you are trying to annotate ${containerName} with application data, use the '$
         window.open(entry.link, "_blank");
       });
       linkCol.appendChild(anchor);
+      const actions = document.createElement("span");
+      actions.className = "attendance-history-col attendance-history-col--actions";
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "attendance-history-delete";
+      deleteBtn.type = "button";
+      deleteBtn.title = "Delete entry";
+      deleteBtn.textContent = "\xD7";
+      deleteBtn.addEventListener("click", async () => {
+        deleteBtn.disabled = true;
+        try {
+          await deleteHistoryEntry(originalIndex);
+        } finally {
+          deleteBtn.disabled = false;
+        }
+      });
+      actions.appendChild(deleteBtn);
       row.appendChild(date);
       row.appendChild(name);
       row.appendChild(linkCol);
+      row.appendChild(actions);
       table.appendChild(row);
-    }
+    });
     container.appendChild(table);
+  }
+  function showAttendanceFormModal(eventId, raidSettings, channelId) {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    const modal = document.createElement("div");
+    modal.className = "modal modal--xwide";
+    const titleRow = document.createElement("div");
+    titleRow.className = "modal__header";
+    const title = document.createElement("h3");
+    title.className = "modal__title";
+    title.textContent = "New Attendance Entry";
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "modal__close";
+    closeBtn.type = "button";
+    closeBtn.textContent = "\xD7";
+    closeBtn.addEventListener("click", () => overlay.remove());
+    titleRow.appendChild(title);
+    titleRow.appendChild(closeBtn);
+    modal.appendChild(titleRow);
+    const body = document.createElement("div");
+    body.className = "modal__body";
+    modal.appendChild(body);
+    const spinner = document.createElement("div");
+    spinner.className = "attendance-loading";
+    spinner.innerHTML = '<div class="spinner"></div><span>Loading event data...</span>';
+    body.appendChild(spinner);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    window.api.fetchRaidHelperEvent(eventId).then((event) => {
+      body.innerHTML = "";
+      const { body: formBody, footer } = buildAttendanceForm(
+        event,
+        eventId,
+        raidSettings,
+        channelId,
+        () => overlay.remove()
+      );
+      body.appendChild(formBody);
+      modal.appendChild(footer);
+    }).catch((err) => {
+      body.innerHTML = "";
+      const errEl = document.createElement("div");
+      errEl.className = "attendance-error";
+      errEl.textContent = `Failed to load event: ${err instanceof Error ? err.message : err}`;
+      body.appendChild(errEl);
+    });
   }
   function createAttendancePage() {
     const page = document.createElement("div");
@@ -59966,303 +60361,25 @@ If you are trying to annotate ${containerName} with application data, use the '$
     newEntryBtn.textContent = "New Entry";
     toolbar.appendChild(newEntryBtn);
     page.appendChild(toolbar);
-    const content = document.createElement("div");
-    content.className = "attendance-content";
-    page.appendChild(content);
     const historyContainer = document.createElement("div");
     historyContainer.className = "attendance-history-container";
     page.appendChild(historyContainer);
     buildHistoryList(historyContainer);
     attendanceStore.subscribe(() => buildHistoryList(historyContainer));
     newEntryBtn.addEventListener("click", () => {
-      showUrlPrompt(async (eventId, raidSettings) => {
-        content.innerHTML = "";
-        const spinner = document.createElement("div");
-        spinner.className = "attendance-loading";
-        spinner.innerHTML = '<div class="spinner"></div><span>Loading event data...</span>';
-        content.appendChild(spinner);
-        try {
-          const event = await window.api.fetchRaidHelperEvent(eventId);
-          content.innerHTML = "";
-          content.appendChild(buildAttendanceForm(event, eventId, raidSettings));
-        } catch (err) {
-          content.innerHTML = "";
-          const errEl = document.createElement("div");
-          errEl.className = "attendance-error";
-          errEl.textContent = `Failed to load event: ${err instanceof Error ? err.message : err}`;
-          content.appendChild(errEl);
-        }
+      showEventPicker((pickedEvent, raidSettings) => {
+        const eventId = String(pickedEvent.id ?? "");
+        const channelId = String(pickedEvent.channelId ?? "");
+        showAttendanceFormModal(eventId, raidSettings, channelId);
       });
     });
     return page;
   }
 
-  // src/renderer/components/pages/SettingsPage.ts
-  var SETTINGS_SHEET = "settings";
-  var SETTINGS_HEADERS = ["Key", "Value"];
-  function createNumberField(labelText, tooltip) {
-    const label = document.createElement("label");
-    label.className = "settings-label";
-    label.textContent = labelText;
-    const input = document.createElement("input");
-    input.type = "number";
-    input.step = "0.01";
-    input.className = "settings-input";
-    input.placeholder = tooltip;
-    input.title = tooltip;
-    return { label, input };
-  }
-  function createSettingsPage() {
-    const page = document.createElement("div");
-    page.className = "page settings-page";
-    const heading = document.createElement("h2");
-    heading.textContent = "Settings";
-    page.appendChild(heading);
-    const saveBtn = document.createElement("button");
-    saveBtn.className = "btn btn--primary";
-    saveBtn.textContent = "Save";
-    const status = document.createElement("span");
-    status.className = "settings-status";
-    const topActions = document.createElement("div");
-    topActions.className = "settings-actions";
-    topActions.appendChild(saveBtn);
-    topActions.appendChild(status);
-    page.appendChild(topActions);
-    const connSection = document.createElement("div");
-    connSection.className = "settings-section";
-    const connHeading = document.createElement("h3");
-    connHeading.className = "settings-section-title";
-    connHeading.textContent = "Connection";
-    connSection.appendChild(connHeading);
-    const form = document.createElement("div");
-    form.className = "settings-form";
-    const urlLabel = document.createElement("label");
-    urlLabel.className = "settings-label";
-    urlLabel.textContent = "Google Sheet URL";
-    const urlInput = document.createElement("input");
-    urlInput.type = "text";
-    urlInput.className = "settings-input";
-    urlInput.placeholder = "https://docs.google.com/spreadsheets/d/.../edit";
-    const keyLabel = document.createElement("label");
-    keyLabel.className = "settings-label";
-    keyLabel.textContent = "Service Account Key File";
-    const keyRow = document.createElement("div");
-    keyRow.className = "settings-key-row";
-    const keyInput = document.createElement("input");
-    keyInput.type = "text";
-    keyInput.className = "settings-input";
-    keyInput.readOnly = true;
-    keyInput.placeholder = "No key file selected";
-    const browseBtn = document.createElement("button");
-    browseBtn.className = "btn";
-    browseBtn.textContent = "Browse...";
-    browseBtn.addEventListener("click", async () => {
-      const path = await window.api.selectServiceAccountKey();
-      if (path) keyInput.value = path;
-    });
-    keyRow.appendChild(keyInput);
-    keyRow.appendChild(browseBtn);
-    const hint = document.createElement("p");
-    hint.className = "settings-hint";
-    hint.textContent = 'Share the Google Sheet with the service account email address (found in the key file as "client_email").';
-    form.appendChild(urlLabel);
-    form.appendChild(urlInput);
-    form.appendChild(keyLabel);
-    form.appendChild(keyRow);
-    form.appendChild(hint);
-    connSection.appendChild(form);
-    page.appendChild(connSection);
-    const rollSection = document.createElement("div");
-    rollSection.className = "settings-section";
-    const rollHeading = document.createElement("h3");
-    rollHeading.className = "settings-section-title";
-    rollHeading.textContent = "Roll Modifier Settings";
-    rollSection.appendChild(rollHeading);
-    const rollForm = document.createElement("div");
-    rollForm.className = "settings-form";
-    const minRollMod = createNumberField("Minimum rollModifier", "0");
-    const maxRollMod = createNumberField("Maximum rollModifier", "10");
-    rollForm.appendChild(minRollMod.label);
-    rollForm.appendChild(minRollMod.input);
-    rollForm.appendChild(maxRollMod.label);
-    rollForm.appendChild(maxRollMod.input);
-    rollSection.appendChild(rollForm);
-    page.appendChild(rollSection);
-    saveBtn.addEventListener("click", async () => {
-      saveBtn.disabled = true;
-      saveBtn.textContent = "Saving...";
-      try {
-        await window.api.saveConfig({
-          googleSheetUrl: urlInput.value.trim(),
-          serviceAccountKeyPath: keyInput.value.trim()
-        });
-        const entries = [
-          { key: "Minimum rollModifier", value: minRollMod.input.value.trim() },
-          { key: "Maximum rollModifier", value: maxRollMod.input.value.trim() }
-        ];
-        settingsStore.replaceAll(entries);
-        const settingsRows = [
-          SETTINGS_HEADERS,
-          ...entries.map((e) => [e.key, e.value])
-        ];
-        await window.api.writeSheet(SETTINGS_SHEET, settingsRows);
-        status.textContent = "Saved!";
-        setTimeout(() => {
-          status.textContent = "";
-        }, 2e3);
-      } catch (err) {
-        status.textContent = `Failed to save: ${err instanceof Error ? err.message : err}`;
-      } finally {
-        saveBtn.disabled = false;
-        saveBtn.textContent = "Save";
-      }
-    });
-    window.api.loadConfig().then((config) => {
-      urlInput.value = config.googleSheetUrl;
-      keyInput.value = config.serviceAccountKeyPath;
-    });
-    function loadFromStore() {
-      minRollMod.input.value = settingsStore.get("Minimum rollModifier");
-      maxRollMod.input.value = settingsStore.get("Maximum rollModifier");
-    }
-    loadFromStore();
-    settingsStore.subscribe(loadFromStore);
-    return page;
-  }
-
-  // src/renderer/components/pages/RaidPage.ts
+  // src/renderer/components/organisms/RaidSettingsSection.ts
   ModuleRegistry.registerModules([AllCommunityModule]);
   var SHEET_NAME2 = "raidsettings";
   var HEADERS2 = ["ID", "name", "award-for-completion", "item-win-deduction", "items-deduction-max", "absence-unexcused", "did-not-sign-up"];
-  function extractEventId2(input) {
-    const trimmed = input.trim();
-    const apiMatch = trimmed.match(/raid-helper\.(?:dev|xyz)\/api\/v2\/events\/(\d+)/);
-    if (apiMatch) return apiMatch[1];
-    const eventMatch = trimmed.match(/raid-helper\.(?:dev|xyz)\/event\/(\d+)/);
-    if (eventMatch) return eventMatch[1];
-    return null;
-  }
-  function showUrlPrompt2(onSubmit) {
-    const overlay = document.createElement("div");
-    overlay.className = "modal-overlay";
-    const modal = document.createElement("div");
-    modal.className = "modal";
-    const title = document.createElement("h3");
-    title.className = "modal__title";
-    title.textContent = "Load Raid Helper Event";
-    modal.appendChild(title);
-    const field = document.createElement("div");
-    field.className = "modal__field";
-    const label = document.createElement("label");
-    label.className = "modal__label";
-    label.textContent = "Raid Helper Event URL";
-    const input = document.createElement("input");
-    input.type = "text";
-    input.className = "modal__input";
-    input.placeholder = "https://raid-helper.dev/event/...";
-    const error = document.createElement("div");
-    error.className = "attendance-url-error";
-    error.style.display = "none";
-    error.textContent = "Invalid URL. Use a raid-helper.dev event or API URL.";
-    field.appendChild(label);
-    field.appendChild(input);
-    field.appendChild(error);
-    modal.appendChild(field);
-    const actions = document.createElement("div");
-    actions.className = "modal__actions";
-    const submitBtn = document.createElement("button");
-    submitBtn.className = "btn btn--primary";
-    submitBtn.textContent = "Load Event";
-    submitBtn.addEventListener("click", () => {
-      const eventId = extractEventId2(input.value);
-      if (!eventId) {
-        error.style.display = "block";
-        input.focus();
-        return;
-      }
-      overlay.remove();
-      onSubmit(eventId);
-    });
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") submitBtn.click();
-    });
-    const cancelBtn = document.createElement("button");
-    cancelBtn.className = "btn";
-    cancelBtn.textContent = "Cancel";
-    cancelBtn.addEventListener("click", () => overlay.remove());
-    actions.appendChild(submitBtn);
-    actions.appendChild(cancelBtn);
-    modal.appendChild(actions);
-    overlay.appendChild(modal);
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) overlay.remove();
-    });
-    document.body.appendChild(overlay);
-    input.focus();
-  }
-  function buildResultForm(matches) {
-    const container = document.createElement("div");
-    container.className = "raid-form";
-    const list = document.createElement("div");
-    list.className = "raid-list";
-    const listHeader = document.createElement("div");
-    listHeader.className = "raid-row raid-row--header";
-    listHeader.innerHTML = `<span class="raid-col raid-col--name">Name</span><span class="raid-col raid-col--rh-name">Raid-Helper Name</span><span class="raid-col raid-col--modifier">Roll Modifier</span><span class="raid-col raid-col--event-name">Event Sign-Up Name</span>`;
-    list.appendChild(listHeader);
-    for (const entry of matches) {
-      const row = document.createElement("div");
-      row.className = "raid-row";
-      if (!entry.name) row.classList.add("raid-row--unmatched");
-      const nameCol = document.createElement("span");
-      nameCol.className = "raid-col raid-col--name";
-      nameCol.textContent = entry.name || "\u2014";
-      const rhNameCol = document.createElement("span");
-      rhNameCol.className = "raid-col raid-col--rh-name";
-      rhNameCol.textContent = entry.raidHelperName || "\u2014";
-      const modCol = document.createElement("span");
-      modCol.className = "raid-col raid-col--modifier";
-      modCol.textContent = entry.rollModifier || "\u2014";
-      const eventNameCol = document.createElement("span");
-      eventNameCol.className = "raid-col raid-col--event-name";
-      eventNameCol.textContent = entry.eventName;
-      row.appendChild(nameCol);
-      row.appendChild(rhNameCol);
-      row.appendChild(modCol);
-      row.appendChild(eventNameCol);
-      list.appendChild(row);
-    }
-    container.appendChild(list);
-    const footer = document.createElement("div");
-    footer.className = "raid-footer";
-    const statusMsg = document.createElement("span");
-    statusMsg.className = "raid-status";
-    footer.appendChild(statusMsg);
-    const exportBtn = document.createElement("button");
-    exportBtn.className = "btn btn--primary";
-    exportBtn.textContent = "Export to clipboard";
-    exportBtn.addEventListener("click", async () => {
-      const data = matches.map((m) => ({
-        name: m.name,
-        raidHelperName: m.raidHelperName,
-        rollModifier: m.rollModifier,
-        eventName: m.eventName
-      }));
-      try {
-        await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
-        statusMsg.textContent = "Copied to clipboard!";
-        statusMsg.className = "raid-status raid-status--success";
-        setTimeout(() => {
-          statusMsg.textContent = "";
-        }, 3e3);
-      } catch {
-        statusMsg.textContent = "Failed to copy to clipboard.";
-        statusMsg.className = "raid-status raid-status--error";
-      }
-    });
-    footer.appendChild(exportBtn);
-    container.appendChild(footer);
-    return container;
-  }
   var raidSettingsFormFields = [
     { key: "id", label: "ID", placeholder: "e.g. 4" },
     { key: "name", label: "Name", placeholder: "e.g. Tempest Keep" },
@@ -60272,6 +60389,27 @@ If you are trying to annotate ${containerName} with application data, use the '$
     { key: "absenceUnexcused", label: "Absence Unexcused", placeholder: "e.g. 0.25" },
     { key: "didNotSignUp", label: "Did Not Sign Up", placeholder: "e.g. 0.1" }
   ];
+  var raidSettingsColumnDefs = [
+    { field: "id", headerName: "ID", width: 70 },
+    { field: "name", headerName: "Name", width: 180 },
+    { field: "awardForCompletion", headerName: "Award for Completion", width: 170 },
+    { field: "itemWinDeduction", headerName: "Item Win Deduction", width: 160 },
+    { field: "itemsDeductionMax", headerName: "Items Deduction Max", width: 170 },
+    { field: "absenceUnexcused", headerName: "Absence Unexcused", width: 160 },
+    { field: "didNotSignUp", headerName: "Did Not Sign Up", flex: 1, minWidth: 140 }
+  ];
+  function parseRaidSettingsSheetRows(rows) {
+    if (rows.length < 2) return [];
+    return rows.slice(1).map((row) => ({
+      id: row[0]?.trim() ?? "",
+      name: row[1]?.trim() ?? "",
+      awardForCompletion: row[2]?.trim() ?? "",
+      itemWinDeduction: row[3]?.trim() ?? "",
+      itemsDeductionMax: row[4]?.trim() ?? "",
+      absenceUnexcused: row[5]?.trim() ?? "",
+      didNotSignUp: row[6]?.trim() ?? ""
+    }));
+  }
   function showAddRaidModal(onAdd) {
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
@@ -60341,81 +60479,497 @@ If you are trying to annotate ${containerName} with application data, use the '$
     document.body.appendChild(overlay);
     inputs.id.focus();
   }
-  var raidSettingsColumnDefs = [
-    { field: "id", headerName: "ID", width: 70 },
-    { field: "name", headerName: "Name", width: 180 },
-    { field: "awardForCompletion", headerName: "Award for Completion", width: 170 },
-    { field: "itemWinDeduction", headerName: "Item Win Deduction", width: 160 },
-    { field: "itemsDeductionMax", headerName: "Items Deduction Max", width: 170 },
-    { field: "absenceUnexcused", headerName: "Absence Unexcused", width: 160 },
-    { field: "didNotSignUp", headerName: "Did Not Sign Up", flex: 1, minWidth: 140 }
-  ];
-  var rsGridApi = null;
-  function parseRaidSettingsSheetRows(rows) {
-    if (rows.length < 2) return [];
-    return rows.slice(1).map((row) => ({
-      id: row[0]?.trim() ?? "",
-      name: row[1]?.trim() ?? "",
-      awardForCompletion: row[2]?.trim() ?? "",
-      itemWinDeduction: row[3]?.trim() ?? "",
-      itemsDeductionMax: row[4]?.trim() ?? "",
-      absenceUnexcused: row[5]?.trim() ?? "",
-      didNotSignUp: row[6]?.trim() ?? ""
-    }));
-  }
-  function getAllRaidSettingsRows() {
-    const rows = [];
-    rsGridApi?.forEachNode((node) => {
-      if (node.data) rows.push(node.data);
+  function createRaidSettingsSection() {
+    const section = document.createElement("div");
+    section.className = "raid-settings-section";
+    let gridApi3 = null;
+    const getAllRows2 = () => {
+      const rows = [];
+      gridApi3?.forEachNode((node) => {
+        if (node.data) rows.push(node.data);
+      });
+      return rows;
+    };
+    const syncToStore3 = () => {
+      raidSettingsStore.replaceAll(getAllRows2());
+    };
+    const toolbar = document.createElement("div");
+    toolbar.className = "loot-history-toolbar";
+    const loadBtn = document.createElement("button");
+    loadBtn.className = "btn btn--primary";
+    loadBtn.textContent = "Load from Sheet";
+    const saveBtn = document.createElement("button");
+    saveBtn.className = "btn btn--primary";
+    saveBtn.textContent = "Save to Sheet";
+    const addBtn = document.createElement("button");
+    addBtn.className = "btn btn--primary";
+    addBtn.textContent = "Add new Raid";
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "btn btn--danger";
+    deleteBtn.textContent = "Delete Selected";
+    toolbar.appendChild(loadBtn);
+    toolbar.appendChild(saveBtn);
+    toolbar.appendChild(addBtn);
+    toolbar.appendChild(deleteBtn);
+    section.appendChild(toolbar);
+    const gridWrap = document.createElement("div");
+    gridWrap.className = "grid-wrap";
+    const spinnerEl3 = document.createElement("div");
+    spinnerEl3.className = "grid-spinner";
+    spinnerEl3.style.display = "none";
+    spinnerEl3.innerHTML = '<div class="spinner"></div>';
+    const gridContainer = document.createElement("div");
+    gridContainer.className = "loot-history-grid";
+    gridWrap.appendChild(spinnerEl3);
+    gridWrap.appendChild(gridContainer);
+    section.appendChild(gridWrap);
+    const gridOptions = {
+      theme: themeAlpine.withPart(colorSchemeDark),
+      columnDefs: raidSettingsColumnDefs,
+      rowData: [],
+      defaultColDef: {
+        editable: true,
+        sortable: true,
+        filter: true,
+        resizable: true
+      },
+      rowSelection: { mode: "multiRow" },
+      undoRedoCellEditing: true,
+      undoRedoCellEditingLimit: 20,
+      onCellValueChanged: () => {
+        syncToStore3();
+      }
+    };
+    gridApi3 = createGrid(gridContainer, gridOptions);
+    const cached = raidSettingsStore.getAll();
+    if (cached.length > 0) {
+      gridApi3.setGridOption("rowData", cached);
+    }
+    raidSettingsStore.subscribe(() => {
+      gridApi3?.setGridOption("rowData", raidSettingsStore.getAll());
     });
-    return rows;
-  }
-  function syncRaidSettingsToStore() {
-    raidSettingsStore.replaceAll(getAllRaidSettingsRows());
-  }
-  var rsSpinnerEl = null;
-  function showRsSpinner() {
-    if (rsSpinnerEl) rsSpinnerEl.style.display = "flex";
-  }
-  function hideRsSpinner() {
-    if (rsSpinnerEl) rsSpinnerEl.style.display = "none";
-  }
-  async function loadRaidSettingsFromSheet(silent = false) {
-    const config = await window.api.loadConfig();
-    if (!config.googleSheetUrl || !config.serviceAccountKeyPath) {
-      if (!silent) alert("Configure Google Sheet URL and service account key in Settings.");
-      return;
+    async function loadFromSheet3() {
+      const config = await window.api.loadConfig();
+      if (!config.googleSheetUrl || !config.serviceAccountKeyPath) {
+        alert("Configure Google Sheet URL and service account key in Settings.");
+        return;
+      }
+      spinnerEl3.style.display = "flex";
+      try {
+        const rows = await window.api.fetchSheet(SHEET_NAME2);
+        const entries = parseRaidSettingsSheetRows(rows);
+        raidSettingsStore.replaceAll(entries);
+        gridApi3?.setGridOption("rowData", entries);
+      } catch (err) {
+        alert(`Failed to load raid settings: ${err instanceof Error ? err.message : err}`);
+      } finally {
+        spinnerEl3.style.display = "none";
+      }
     }
-    showRsSpinner();
-    try {
-      const rows = await window.api.fetchSheet(SHEET_NAME2);
-      const entries = parseRaidSettingsSheetRows(rows);
-      raidSettingsStore.replaceAll(entries);
-      rsGridApi?.setGridOption("rowData", entries);
-    } catch (err) {
-      if (!silent) alert(`Failed to load raid settings: ${err instanceof Error ? err.message : err}`);
-    } finally {
-      hideRsSpinner();
+    async function saveToSheet2() {
+      const config = await window.api.loadConfig();
+      if (!config.googleSheetUrl || !config.serviceAccountKeyPath) {
+        alert("Configure Google Sheet URL and service account key in Settings.");
+        return;
+      }
+      syncToStore3();
+      const entries = raidSettingsStore.getAll();
+      const dataRows = entries.map((e) => [
+        e.id,
+        e.name,
+        e.awardForCompletion,
+        e.itemWinDeduction,
+        e.itemsDeductionMax,
+        e.absenceUnexcused,
+        e.didNotSignUp
+      ]);
+      await window.api.writeSheet(SHEET_NAME2, [HEADERS2, ...dataRows]);
     }
+    loadBtn.addEventListener("click", () => {
+      loadBtn.disabled = true;
+      loadBtn.textContent = "Loading...";
+      loadFromSheet3().finally(() => {
+        loadBtn.disabled = false;
+        loadBtn.textContent = "Load from Sheet";
+      });
+    });
+    saveBtn.addEventListener("click", async () => {
+      saveBtn.disabled = true;
+      saveBtn.textContent = "Saving...";
+      try {
+        await saveToSheet2();
+        saveBtn.textContent = "Saved!";
+        setTimeout(() => {
+          saveBtn.textContent = "Save to Sheet";
+        }, 2e3);
+      } catch (err) {
+        alert(`Failed to save raid settings: ${err instanceof Error ? err.message : err}`);
+        saveBtn.textContent = "Save to Sheet";
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+    addBtn.addEventListener("click", () => {
+      showAddRaidModal(async (entry) => {
+        gridApi3?.applyTransaction({ add: [entry] });
+        try {
+          await saveToSheet2();
+        } catch (err) {
+          alert(`Raid added locally but failed to save: ${err instanceof Error ? err.message : err}`);
+        }
+      });
+    });
+    deleteBtn.addEventListener("click", () => {
+      const selected = gridApi3?.getSelectedRows();
+      if (selected && selected.length > 0) {
+        gridApi3?.applyTransaction({ remove: selected });
+        syncToStore3();
+      }
+    });
+    return section;
   }
-  async function saveRaidSettingsToSheet() {
-    const config = await window.api.loadConfig();
-    if (!config.googleSheetUrl || !config.serviceAccountKeyPath) {
-      alert("Configure Google Sheet URL and service account key in Settings.");
-      return;
+
+  // src/renderer/components/pages/SettingsPage.ts
+  var SETTINGS_SHEET = "settings";
+  var SETTINGS_HEADERS = ["Key", "Value"];
+  function createNumberField(labelText, tooltip) {
+    const label = document.createElement("label");
+    label.className = "settings-label";
+    label.textContent = labelText;
+    const input = document.createElement("input");
+    input.type = "number";
+    input.step = "0.01";
+    input.className = "settings-input";
+    input.placeholder = tooltip;
+    input.title = tooltip;
+    return { label, input };
+  }
+  function createGeneralSettings() {
+    const wrap = document.createElement("div");
+    wrap.className = "settings-tab-content";
+    const saveBtn = document.createElement("button");
+    saveBtn.className = "btn btn--primary";
+    saveBtn.textContent = "Save";
+    const status = document.createElement("span");
+    status.className = "settings-status";
+    const topActions = document.createElement("div");
+    topActions.className = "settings-actions";
+    topActions.appendChild(saveBtn);
+    topActions.appendChild(status);
+    wrap.appendChild(topActions);
+    const connSection = document.createElement("div");
+    connSection.className = "settings-section";
+    const connHeading = document.createElement("h3");
+    connHeading.className = "settings-section-title";
+    connHeading.textContent = "Connection";
+    connSection.appendChild(connHeading);
+    const form = document.createElement("div");
+    form.className = "settings-form";
+    const urlLabel = document.createElement("label");
+    urlLabel.className = "settings-label";
+    urlLabel.textContent = "Google Sheet URL";
+    const urlInput = document.createElement("input");
+    urlInput.type = "text";
+    urlInput.className = "settings-input";
+    urlInput.placeholder = "https://docs.google.com/spreadsheets/d/.../edit";
+    const keyLabel = document.createElement("label");
+    keyLabel.className = "settings-label";
+    keyLabel.textContent = "Service Account Key File";
+    const keyRow = document.createElement("div");
+    keyRow.className = "settings-key-row";
+    const keyInput = document.createElement("input");
+    keyInput.type = "text";
+    keyInput.className = "settings-input";
+    keyInput.readOnly = true;
+    keyInput.placeholder = "No key file selected";
+    const browseBtn = document.createElement("button");
+    browseBtn.className = "btn";
+    browseBtn.textContent = "Browse...";
+    browseBtn.addEventListener("click", async () => {
+      const path = await window.api.selectServiceAccountKey();
+      if (path) keyInput.value = path;
+    });
+    keyRow.appendChild(keyInput);
+    keyRow.appendChild(browseBtn);
+    const hint = document.createElement("p");
+    hint.className = "settings-hint";
+    hint.textContent = 'Share the Google Sheet with the service account email address (found in the key file as "client_email").';
+    form.appendChild(urlLabel);
+    form.appendChild(urlInput);
+    form.appendChild(keyLabel);
+    form.appendChild(keyRow);
+    form.appendChild(hint);
+    connSection.appendChild(form);
+    wrap.appendChild(connSection);
+    const rhSection = document.createElement("div");
+    rhSection.className = "settings-section";
+    const rhHeading = document.createElement("h3");
+    rhHeading.className = "settings-section-title";
+    rhHeading.textContent = "Raid Helper";
+    rhSection.appendChild(rhHeading);
+    const rhForm = document.createElement("div");
+    rhForm.className = "settings-form";
+    const rhServerLabel = document.createElement("label");
+    rhServerLabel.className = "settings-label";
+    rhServerLabel.textContent = "Discord Server ID";
+    const rhServerInput = document.createElement("input");
+    rhServerInput.type = "text";
+    rhServerInput.className = "settings-input";
+    rhServerInput.placeholder = "e.g. 123456789012345678";
+    const rhKeyLabel = document.createElement("label");
+    rhKeyLabel.className = "settings-label";
+    rhKeyLabel.textContent = "API Key";
+    const rhKeyInput = document.createElement("input");
+    rhKeyInput.type = "password";
+    rhKeyInput.className = "settings-input";
+    rhKeyInput.placeholder = "From the /apikey command in your Discord";
+    const rhStartLabel = document.createElement("label");
+    rhStartLabel.className = "settings-label";
+    rhStartLabel.textContent = "Earliest event date to load";
+    const rhStartInput = document.createElement("input");
+    rhStartInput.type = "date";
+    rhStartInput.className = "settings-input";
+    const rhHint = document.createElement("p");
+    rhHint.className = "settings-hint";
+    rhHint.textContent = "Run /apikey in your Discord server (admin or manage-server permission required) to view or refresh the API key. The date filter limits which events are fetched in the attendance picker.";
+    rhForm.appendChild(rhServerLabel);
+    rhForm.appendChild(rhServerInput);
+    rhForm.appendChild(rhKeyLabel);
+    rhForm.appendChild(rhKeyInput);
+    rhForm.appendChild(rhStartLabel);
+    rhForm.appendChild(rhStartInput);
+    rhForm.appendChild(rhHint);
+    rhSection.appendChild(rhForm);
+    wrap.appendChild(rhSection);
+    saveBtn.addEventListener("click", async () => {
+      saveBtn.disabled = true;
+      saveBtn.textContent = "Saving...";
+      try {
+        await window.api.saveConfig({
+          googleSheetUrl: urlInput.value.trim(),
+          serviceAccountKeyPath: keyInput.value.trim(),
+          raidHelperServerId: rhServerInput.value.trim(),
+          raidHelperApiKey: rhKeyInput.value.trim(),
+          raidHelperEventStartDate: rhStartInput.value.trim()
+        });
+        status.textContent = "Saved!";
+        setTimeout(() => {
+          status.textContent = "";
+        }, 2e3);
+      } catch (err) {
+        status.textContent = `Failed to save: ${err instanceof Error ? err.message : err}`;
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Save";
+      }
+    });
+    window.api.loadConfig().then((config) => {
+      urlInput.value = config.googleSheetUrl;
+      keyInput.value = config.serviceAccountKeyPath;
+      rhServerInput.value = config.raidHelperServerId;
+      rhKeyInput.value = config.raidHelperApiKey;
+      rhStartInput.value = config.raidHelperEventStartDate;
+    });
+    return wrap;
+  }
+  function createRollModifierSettings() {
+    const wrap = document.createElement("div");
+    wrap.className = "settings-tab-content";
+    const saveBtn = document.createElement("button");
+    saveBtn.className = "btn btn--primary";
+    saveBtn.textContent = "Save";
+    const status = document.createElement("span");
+    status.className = "settings-status";
+    const topActions = document.createElement("div");
+    topActions.className = "settings-actions";
+    topActions.appendChild(saveBtn);
+    topActions.appendChild(status);
+    wrap.appendChild(topActions);
+    const section = document.createElement("div");
+    section.className = "settings-section";
+    const heading = document.createElement("h3");
+    heading.className = "settings-section-title";
+    heading.textContent = "Roll Modifier Settings";
+    section.appendChild(heading);
+    const form = document.createElement("div");
+    form.className = "settings-form";
+    const minRollMod = createNumberField("Minimum rollModifier", "0");
+    const maxRollMod = createNumberField("Maximum rollModifier", "10");
+    form.appendChild(minRollMod.label);
+    form.appendChild(minRollMod.input);
+    form.appendChild(maxRollMod.label);
+    form.appendChild(maxRollMod.input);
+    section.appendChild(form);
+    wrap.appendChild(section);
+    saveBtn.addEventListener("click", async () => {
+      saveBtn.disabled = true;
+      saveBtn.textContent = "Saving...";
+      try {
+        const entries = [
+          { key: "Minimum rollModifier", value: minRollMod.input.value.trim() },
+          { key: "Maximum rollModifier", value: maxRollMod.input.value.trim() }
+        ];
+        settingsStore.replaceAll(entries);
+        const settingsRows = [
+          SETTINGS_HEADERS,
+          ...entries.map((e) => [e.key, e.value])
+        ];
+        await window.api.writeSheet(SETTINGS_SHEET, settingsRows);
+        status.textContent = "Saved!";
+        setTimeout(() => {
+          status.textContent = "";
+        }, 2e3);
+      } catch (err) {
+        status.textContent = `Failed to save: ${err instanceof Error ? err.message : err}`;
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Save";
+      }
+    });
+    function loadFromStore() {
+      minRollMod.input.value = settingsStore.get("Minimum rollModifier");
+      maxRollMod.input.value = settingsStore.get("Maximum rollModifier");
     }
-    syncRaidSettingsToStore();
-    const entries = raidSettingsStore.getAll();
-    const dataRows = entries.map((e) => [
-      e.id,
-      e.name,
-      e.awardForCompletion,
-      e.itemWinDeduction,
-      e.itemsDeductionMax,
-      e.absenceUnexcused,
-      e.didNotSignUp
-    ]);
-    await window.api.writeSheet(SHEET_NAME2, [HEADERS2, ...dataRows]);
+    loadFromStore();
+    settingsStore.subscribe(loadFromStore);
+    return wrap;
+  }
+  function createSettingsPage() {
+    const page = document.createElement("div");
+    page.className = "page settings-page";
+    const heading = document.createElement("h2");
+    heading.textContent = "Settings";
+    page.appendChild(heading);
+    const tabBar = document.createElement("div");
+    tabBar.className = "settings-tabs";
+    page.appendChild(tabBar);
+    const tabs = [
+      { label: "General Settings", build: createGeneralSettings },
+      { label: "Roll Modifier Settings", build: createRollModifierSettings },
+      { label: "Raid Settings", build: createRaidSettingsSection }
+    ];
+    const tabContents = tabs.map(() => null);
+    const tabButtons = [];
+    function activate(index) {
+      tabs.forEach((_, i) => {
+        tabButtons[i].classList.toggle("settings-tab--active", i === index);
+      });
+      if (!tabContents[index]) {
+        const built = tabs[index].build();
+        built.classList.add("settings-tab-content");
+        page.appendChild(built);
+        tabContents[index] = built;
+      }
+      tabContents.forEach((el, i) => {
+        if (el) el.style.display = i === index ? "" : "none";
+      });
+    }
+    tabs.forEach((tab, index) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "settings-tab";
+      btn.textContent = tab.label;
+      btn.addEventListener("click", () => activate(index));
+      tabBar.appendChild(btn);
+      tabButtons.push(btn);
+    });
+    activate(0);
+    return page;
+  }
+
+  // src/renderer/components/pages/RaidPage.ts
+  function showEventPicker2(onSubmit) {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    const modal = document.createElement("div");
+    modal.className = "modal modal--wide";
+    const title = document.createElement("h3");
+    title.className = "modal__title";
+    title.textContent = "Load Raid Helper Event";
+    modal.appendChild(title);
+    const picker = createRhEventPicker({
+      onSelect: (ev) => {
+        overlay.remove();
+        onSubmit(String(ev.id ?? ""));
+      }
+    });
+    modal.appendChild(picker);
+    const actions = document.createElement("div");
+    actions.className = "modal__actions";
+    const cancelBtn = document.createElement("button");
+    cancelBtn.className = "btn";
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.addEventListener("click", () => overlay.remove());
+    actions.appendChild(cancelBtn);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+    document.body.appendChild(overlay);
+  }
+  function buildResultForm(matches) {
+    const container = document.createElement("div");
+    container.className = "raid-form";
+    const list = document.createElement("div");
+    list.className = "raid-list";
+    const listHeader = document.createElement("div");
+    listHeader.className = "raid-row raid-row--header";
+    listHeader.innerHTML = `<span class="raid-col raid-col--name">Name</span><span class="raid-col raid-col--rh-name">Raid-Helper Name</span><span class="raid-col raid-col--modifier">Roll Modifier</span><span class="raid-col raid-col--event-name">Event Sign-Up Name</span>`;
+    list.appendChild(listHeader);
+    for (const entry of matches) {
+      const row = document.createElement("div");
+      row.className = "raid-row";
+      if (!entry.name) row.classList.add("raid-row--unmatched");
+      const nameCol = document.createElement("span");
+      nameCol.className = "raid-col raid-col--name";
+      nameCol.textContent = entry.name || "\u2014";
+      const rhNameCol = document.createElement("span");
+      rhNameCol.className = "raid-col raid-col--rh-name";
+      rhNameCol.textContent = entry.raidHelperName || "\u2014";
+      const modCol = document.createElement("span");
+      modCol.className = "raid-col raid-col--modifier";
+      modCol.textContent = entry.rollModifier || "\u2014";
+      const eventNameCol = document.createElement("span");
+      eventNameCol.className = "raid-col raid-col--event-name";
+      eventNameCol.textContent = entry.eventName;
+      row.appendChild(nameCol);
+      row.appendChild(rhNameCol);
+      row.appendChild(modCol);
+      row.appendChild(eventNameCol);
+      list.appendChild(row);
+    }
+    container.appendChild(list);
+    const footer = document.createElement("div");
+    footer.className = "raid-footer";
+    const statusMsg = document.createElement("span");
+    statusMsg.className = "raid-status";
+    footer.appendChild(statusMsg);
+    const exportBtn = document.createElement("button");
+    exportBtn.className = "btn btn--primary";
+    exportBtn.textContent = "Export to clipboard";
+    exportBtn.addEventListener("click", async () => {
+      const data = matches.map((m) => ({
+        name: m.name,
+        raidHelperName: m.raidHelperName,
+        rollModifier: m.rollModifier,
+        eventName: m.eventName
+      }));
+      try {
+        await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+        statusMsg.textContent = "Copied to clipboard!";
+        statusMsg.className = "raid-status raid-status--success";
+        setTimeout(() => {
+          statusMsg.textContent = "";
+        }, 3e3);
+      } catch {
+        statusMsg.textContent = "Failed to copy to clipboard.";
+        statusMsg.className = "raid-status raid-status--error";
+      }
+    });
+    footer.appendChild(exportBtn);
+    container.appendChild(footer);
+    return container;
   }
   function createRaidPage() {
     const page = document.createElement("div");
@@ -60431,7 +60985,7 @@ If you are trying to annotate ${containerName} with application data, use the '$
     content.className = "raid-content";
     page.appendChild(content);
     exportBtn.addEventListener("click", () => {
-      showUrlPrompt2(async (eventId) => {
+      showEventPicker2(async (eventId) => {
         content.innerHTML = "";
         const spinner = document.createElement("div");
         spinner.className = "attendance-loading";
@@ -60461,106 +61015,6 @@ If you are trying to annotate ${containerName} with application data, use the '$
           content.appendChild(errEl);
         }
       });
-    });
-    const sectionTitle = document.createElement("h2");
-    sectionTitle.className = "section-title";
-    sectionTitle.textContent = "Raid Settings";
-    page.appendChild(sectionTitle);
-    const rsToolbar = document.createElement("div");
-    rsToolbar.className = "loot-history-toolbar";
-    const rsLoadBtn = document.createElement("button");
-    rsLoadBtn.className = "btn btn--primary";
-    rsLoadBtn.textContent = "Load from Sheet";
-    rsLoadBtn.addEventListener("click", () => {
-      rsLoadBtn.disabled = true;
-      rsLoadBtn.textContent = "Loading...";
-      loadRaidSettingsFromSheet().finally(() => {
-        rsLoadBtn.disabled = false;
-        rsLoadBtn.textContent = "Load from Sheet";
-      });
-    });
-    const rsSaveBtn = document.createElement("button");
-    rsSaveBtn.className = "btn btn--primary";
-    rsSaveBtn.textContent = "Save to Sheet";
-    rsSaveBtn.addEventListener("click", async () => {
-      rsSaveBtn.disabled = true;
-      rsSaveBtn.textContent = "Saving...";
-      try {
-        await saveRaidSettingsToSheet();
-        rsSaveBtn.textContent = "Saved!";
-        setTimeout(() => {
-          rsSaveBtn.textContent = "Save to Sheet";
-        }, 2e3);
-      } catch (err) {
-        alert(`Failed to save raid settings: ${err instanceof Error ? err.message : err}`);
-        rsSaveBtn.textContent = "Save to Sheet";
-      } finally {
-        rsSaveBtn.disabled = false;
-      }
-    });
-    const rsAddBtn = document.createElement("button");
-    rsAddBtn.className = "btn btn--primary";
-    rsAddBtn.textContent = "Add new Raid";
-    rsAddBtn.addEventListener("click", () => {
-      showAddRaidModal(async (entry) => {
-        rsGridApi?.applyTransaction({ add: [entry] });
-        try {
-          await saveRaidSettingsToSheet();
-        } catch (err) {
-          alert(`Raid added locally but failed to save: ${err instanceof Error ? err.message : err}`);
-        }
-      });
-    });
-    const rsDeleteBtn = document.createElement("button");
-    rsDeleteBtn.className = "btn btn--danger";
-    rsDeleteBtn.textContent = "Delete Selected";
-    rsDeleteBtn.addEventListener("click", () => {
-      const selected = rsGridApi?.getSelectedRows();
-      if (selected && selected.length > 0) {
-        rsGridApi?.applyTransaction({ remove: selected });
-        syncRaidSettingsToStore();
-      }
-    });
-    rsToolbar.appendChild(rsLoadBtn);
-    rsToolbar.appendChild(rsSaveBtn);
-    rsToolbar.appendChild(rsAddBtn);
-    rsToolbar.appendChild(rsDeleteBtn);
-    page.appendChild(rsToolbar);
-    const gridWrap = document.createElement("div");
-    gridWrap.className = "grid-wrap";
-    rsSpinnerEl = document.createElement("div");
-    rsSpinnerEl.className = "grid-spinner";
-    rsSpinnerEl.style.display = "none";
-    rsSpinnerEl.innerHTML = '<div class="spinner"></div>';
-    const gridContainer = document.createElement("div");
-    gridContainer.className = "loot-history-grid";
-    gridWrap.appendChild(rsSpinnerEl);
-    gridWrap.appendChild(gridContainer);
-    page.appendChild(gridWrap);
-    const gridOptions = {
-      theme: themeAlpine.withPart(colorSchemeDark),
-      columnDefs: raidSettingsColumnDefs,
-      rowData: [],
-      defaultColDef: {
-        editable: true,
-        sortable: true,
-        filter: true,
-        resizable: true
-      },
-      rowSelection: { mode: "multiRow" },
-      undoRedoCellEditing: true,
-      undoRedoCellEditingLimit: 20,
-      onCellValueChanged: () => {
-        syncRaidSettingsToStore();
-      }
-    };
-    rsGridApi = createGrid(gridContainer, gridOptions);
-    const cached = raidSettingsStore.getAll();
-    if (cached.length > 0) {
-      rsGridApi.setGridOption("rowData", cached);
-    }
-    raidSettingsStore.subscribe(() => {
-      rsGridApi?.setGridOption("rowData", raidSettingsStore.getAll());
     });
     return page;
   }
@@ -60629,6 +61083,18 @@ If you are trying to annotate ${containerName} with application data, use the '$
       roster: row[3] ?? ""
     }));
   }
+  function parseRhImportHistoryRows(rows) {
+    if (rows.length < 2) return [];
+    return rows.slice(1).map((row) => ({
+      eventId: row[0]?.trim() ?? "",
+      title: row[1]?.trim() ?? "",
+      date: row[2]?.trim() ?? "",
+      time: row[3]?.trim() ?? "",
+      leaderName: row[4]?.trim() ?? "",
+      channelId: row[5]?.trim() ?? "",
+      importedAt: row[6]?.trim() ?? ""
+    }));
+  }
   async function preloadSheetData() {
     const config = await window.api.loadConfig();
     if (!config.googleSheetUrl || !config.serviceAccountKeyPath) return;
@@ -60668,6 +61134,13 @@ If you are trying to annotate ${containerName} with application data, use the '$
         }).catch((err) => console.error("Preload raidsettings failed:", err))
       );
     }
+    if (rhImportHistoryStore.getAll().length === 0) {
+      fetches.push(
+        window.api.fetchSheet("rh-import-history").then((rows) => {
+          rhImportHistoryStore.replaceAll(parseRhImportHistoryRows(rows));
+        }).catch((err) => console.error("Preload rh-import-history failed:", err))
+      );
+    }
     await Promise.all(fetches);
   }
   function navigateTo(hash) {
@@ -60686,7 +61159,7 @@ If you are trying to annotate ${containerName} with application data, use the '$
     banner.alt = "From the Ashes";
     const version = document.createElement("span");
     version.className = "app-version";
-    version.textContent = "v1.4.2";
+    version.textContent = "v1.5.0";
     bannerWrap.appendChild(banner);
     bannerWrap.appendChild(version);
     body.appendChild(bannerWrap);

@@ -177,12 +177,58 @@ main {
 }
 
 .settings-page h2 {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
   color: #d4a535;
+}
+
+.settings-tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid #5c3a10;
+  margin-bottom: 1rem;
+}
+
+.settings-tab {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: #a08060;
+  font-size: 0.9rem;
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+
+.settings-tab:hover {
+  color: #c4a878;
+}
+
+.settings-tab--active {
+  color: #d4a535;
+  border-bottom-color: #d4a535;
+}
+
+.settings-tab-content {
+  display: block;
+}
+
+.raid-settings-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.raid-settings-section .grid-wrap {
+  flex: none;
+  height: calc(100vh - 280px);
+  min-height: 300px;
 }
 
 .settings-section {
   margin-top: 1.5rem;
+}
+
+.settings-section:first-child {
+  margin-top: 0;
 }
 
 .settings-section-title {
@@ -551,6 +597,23 @@ main {
   border-color: var(--accent-primary);
 }
 
+select.attendance-award-input {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, #c4a878 50%),
+                    linear-gradient(135deg, #c4a878 50%, transparent 50%);
+  background-position: calc(100% - 12px) 50%, calc(100% - 7px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 22px;
+}
+
+.attendance-award-input option {
+  background-color: #1a1008;
+  color: #e8d5b5;
+}
+
 .attendance-col--check {
   width: 70px;
   text-align: center;
@@ -574,6 +637,21 @@ main {
   margin-bottom: 0.4rem;
 }
 
+.attendance-unknown-hint {
+  font-size: 0.8rem;
+  color: #806848;
+  margin: 0 0 0.5rem 0;
+}
+
+.attendance-absences--top {
+  margin-top: 0;
+  margin-bottom: 1.25rem;
+}
+
+.attendance-row--unknown {
+  background-color: rgba(212, 165, 53, 0.04);
+}
+
 .attendance-absences-list {
   font-size: 0.85rem;
   color: #7a6a4a;
@@ -594,6 +672,16 @@ main {
   align-items: center;
 }
 
+.attendance-footer-status {
+  font-size: 0.85rem;
+  color: #c4a878;
+  margin-right: auto;
+}
+
+.attendance-footer-status--error {
+  color: #f0a0a0;
+}
+
 .attendance-history-container {
   margin-top: 1.5rem;
 }
@@ -607,7 +695,8 @@ main {
 .attendance-history {
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  overflow: hidden;
+  max-height: 45vh;
+  overflow-y: auto;
 }
 
 .attendance-history-row {
@@ -654,6 +743,40 @@ main {
 
 .attendance-history-col--link a:hover {
   text-decoration: underline;
+}
+
+.attendance-history-col--actions {
+  width: 32px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.attendance-history-delete {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #5c3a10;
+  border-radius: 4px;
+  background: transparent;
+  color: #a08060;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.attendance-history-delete:hover {
+  background-color: #3a0a0a;
+  border-color: #6a1818;
+  color: #f0a0a0;
+}
+
+.attendance-history-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Raid Page */
@@ -835,4 +958,192 @@ main {
 
 .csv-paste-input:focus {
   border-color: #d4a535;
+}
+
+/* Raid Helper event picker */
+.modal--wide {
+  width: 720px;
+}
+
+.modal--xwide {
+  width: 95vw;
+  max-width: 1100px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal--xwide .modal__header {
+  flex: none;
+}
+
+.modal--xwide .modal__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0 -0.25rem;
+  padding: 0 0.25rem;
+}
+
+.modal--xwide .attendance-footer {
+  flex: none;
+  margin-top: 1rem;
+}
+
+.modal--xwide .attendance-form {
+  display: block;
+}
+
+.rh-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.rh-picker__controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.rh-picker__search {
+  flex: 1;
+  min-width: 0;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid #5c3a10;
+  border-radius: 4px;
+  background-color: #0d0a07;
+  color: #e8d5b5;
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.rh-picker__search:focus {
+  border-color: #d4a535;
+}
+
+.rh-picker__search::placeholder {
+  color: #806848;
+}
+
+.rh-picker__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: #c4a878;
+  cursor: pointer;
+}
+
+.rh-picker__toggle input {
+  accent-color: #d4a535;
+  cursor: pointer;
+}
+
+.rh-picker__refresh {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+.rh-picker__status {
+  display: none;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.rh-picker__status--error {
+  background-color: #3a0a0a;
+  border: 1px solid #6a1818;
+  color: #f0a0a0;
+}
+
+.rh-picker__list {
+  max-height: 380px;
+  overflow-y: auto;
+  border: 1px solid #5c3a10;
+  border-radius: 4px;
+  background-color: #0d0a07;
+}
+
+.rh-picker__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 1.5rem;
+  color: #c4a878;
+  font-size: 0.85rem;
+}
+
+.rh-picker__empty {
+  padding: 1.5rem;
+  text-align: center;
+  color: #806848;
+  font-size: 0.85rem;
+}
+
+.rh-picker__row {
+  display: grid;
+  grid-template-columns: 130px 1fr 160px 90px;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  background: none;
+  border: none;
+  border-bottom: 1px solid #2a1d10;
+  color: #e8d5b5;
+  text-align: left;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.rh-picker__row:hover {
+  background-color: #221710;
+}
+
+.rh-picker__row:last-child {
+  border-bottom: none;
+}
+
+.rh-picker__row--imported {
+  opacity: 0.65;
+}
+
+.rh-picker__col--date {
+  color: #c4a878;
+  font-family: monospace;
+  font-size: 0.8rem;
+}
+
+.rh-picker__col--title {
+  color: #d4a535;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rh-picker__col--leader {
+  color: #a08060;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rh-picker__col--badge {
+  text-align: right;
+}
+
+.rh-picker__badge {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+  background-color: #3d2a10;
+  color: #d4a535;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
