@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.6.0
+
+### New Features
+- **Attendance buckets with move actions** - The attendance entry form now uses four bucket lists (Attended, Excused absent, Unexcused absent, Did not sign up) with per-row "→ {bucket}" move buttons in place of the old checkbox/absences-blob/DNS layout. Each row's point value resets to the target bucket's default when moved
+- **Excused vs Unexcused absences** - Raid Helper "Absence" sign-ups now land in *Excused absent* (no deduction). Move a row to *Unexcused absent* to apply the configured `absenceUnexcused` deduction
+- **Refresh previous events** - New button on the Attendance page that re-fetches the attendance sheet and overwrites the local store, so cached data can be refreshed without restarting the app
+
+### Changes
+- **Export Roll Modifiers no longer requires an event** - The Raid page lists every roster member with their roll modifier directly, with no event picker. Click "Export to clipboard" to copy the JSON
+- **Attendance now refreshes from the sheet on every startup** - Previously the local cache short-circuited the fetch when non-empty, so returning users saw stale data. Now the sheet is always re-read at launch (the cache still seeds the UI instantly)
+- **Attendance bucket rows sorted alphabetically** - Initial population and post-move ordering are alphabetical by name
+- **Trimmed columns from the attendance entry form** - Class, Spec, and Role columns removed; they were redundant given the bucketed layout and the auto-matched roster identity
+
+### Bug Fixes
+- The `absenceUnexcused` raid setting is now actually applied at award time (previously it was configurable in Settings but never read by the attendance flow)
+
 ## v1.5.0
 
 ### New Features

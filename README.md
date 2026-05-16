@@ -5,7 +5,7 @@ Desktop application for managing raids, loot, and attendance for the WoW TBC Ann
 ## Features
 
 - **Direct Raid Helper integration** - Pull past events directly from your Discord server via the Raid Helper API; no copy-pasting URLs. Configurable earliest-event date filter.
-- **Attendance tracking** - Auto-match sign-ups against the roster, dedicated section for unknown players (pugs / new members) with a roster picker, and per-raid awards and deductions
+- **Attendance tracking** - Bucket-based entry form with movable Attended / Excused / Unexcused / Did-not-sign-up lists, auto-matched sign-ups, a dedicated unknown-players section for pugs / new members, and per-raid awards and deductions
 - **Loot history** - Import loot CSV with per-raid deduction tracking, off-spec exclusion, and maximum deduction caps per player per import
 - **Roster management** - Maintain guild members with class, specs, professions, and roll modifiers
 - **Per-raid settings** - Each raid has its own awards and deductions (Karazhan and Gruul's Lair use different values)

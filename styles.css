@@ -652,6 +652,47 @@ select.attendance-award-input {
   background-color: rgba(212, 165, 53, 0.04);
 }
 
+.attendance-bucket {
+  margin-top: 1.25rem;
+}
+
+.attendance-col--actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.35rem;
+  justify-content: flex-end;
+  min-width: 200px;
+}
+
+.attendance-move-btn {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  padding: 2px 8px;
+  font-size: 0.78rem;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.attendance-move-btn:hover {
+  border-color: var(--accent);
+  background: rgba(212, 165, 53, 0.08);
+}
+
+.attendance-row--excused {
+  background-color: rgba(120, 160, 90, 0.04);
+}
+
+.attendance-row--unexcused {
+  background-color: rgba(180, 80, 80, 0.04);
+}
+
+.attendance-row--dns {
+  background-color: rgba(120, 120, 120, 0.04);
+}
+
 .attendance-absences-list {
   font-size: 0.85rem;
   color: #7a6a4a;

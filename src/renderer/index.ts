@@ -124,13 +124,11 @@ async function preloadSheetData(): Promise<void> {
     );
   }
 
-  if (attendanceStore.getAll().length === 0) {
-    fetches.push(
-      window.api.fetchSheet("attendance").then((rows) => {
-        attendanceStore.replaceAll(parseAttendanceRows(rows));
-      }).catch((err) => console.error("Preload attendance failed:", err))
-    );
-  }
+  fetches.push(
+    window.api.fetchSheet("attendance").then((rows) => {
+      attendanceStore.replaceAll(parseAttendanceRows(rows));
+    }).catch((err) => console.error("Preload attendance failed:", err))
+  );
 
   if (settingsStore.getAll().length === 0) {
     fetches.push(
@@ -179,7 +177,7 @@ function init(): void {
 
   const version = document.createElement("span");
   version.className = "app-version";
-  version.textContent = "v1.5.0";
+  version.textContent = "v1.6.0";
 
   bannerWrap.appendChild(banner);
   bannerWrap.appendChild(version);

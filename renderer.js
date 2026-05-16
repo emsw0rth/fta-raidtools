@@ -59762,20 +59762,6 @@ If you are trying to annotate ${containerName} with application data, use the '$
     if (byName) return byName.name;
     return "";
   }
-  function roleSort(roleName) {
-    switch (roleName) {
-      case "Tanks":
-        return 0;
-      case "Healers":
-        return 1;
-      case "Melee":
-        return 2;
-      case "Ranged":
-        return 3;
-      default:
-        return 4;
-    }
-  }
   function showEventPicker(onSubmit) {
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
@@ -59849,6 +59835,96 @@ If you are trying to annotate ${containerName} with application data, use the '$
     document.body.appendChild(overlay);
     raidSelect.focus();
   }
+  var BUCKET_LABEL = {
+    attended: "Attended",
+    excused: "Excused absent",
+    unexcused: "Unexcused absent",
+    dns: "Did not sign up"
+  };
+  function bucketDefaultPoints(bucket, raidSettings) {
+    switch (bucket) {
+      case "attended":
+        return raidSettings.awardForCompletion || "0";
+      case "excused":
+        return "0";
+      case "unexcused":
+        return `-${raidSettings.absenceUnexcused || "0"}`;
+      case "dns":
+        return `-${raidSettings.didNotSignUp || "0"}`;
+    }
+  }
+  function sortAttendanceList(list) {
+    const rows = Array.from(list.querySelectorAll(".attendance-row:not(.attendance-row--header)"));
+    rows.sort((a, b) => {
+      const aName = a.querySelector(".attendance-col--name")?.textContent ?? "";
+      const bName = b.querySelector(".attendance-col--name")?.textContent ?? "";
+      return aName.localeCompare(bName);
+    }).forEach((row) => list.appendChild(row));
+  }
+  function buildMovableRow(bucket, rosterName, displayName, raidSettings, listFor) {
+    const row = document.createElement("div");
+    row.className = `attendance-row attendance-row--${bucket}`;
+    row.dataset.bucket = bucket;
+    const name = document.createElement("span");
+    name.className = "attendance-col attendance-col--name";
+    name.textContent = displayName;
+    const pointsWrap = document.createElement("span");
+    pointsWrap.className = "attendance-col attendance-col--points";
+    const pointsInput = document.createElement("input");
+    pointsInput.type = "text";
+    pointsInput.className = "attendance-points-input";
+    pointsInput.value = bucketDefaultPoints(bucket, raidSettings);
+    pointsWrap.appendChild(pointsInput);
+    const awardWrap = document.createElement("span");
+    awardWrap.className = "attendance-col attendance-col--award";
+    const awardInput = document.createElement("input");
+    awardInput.type = "text";
+    awardInput.className = "attendance-award-input";
+    awardInput.value = rosterName;
+    awardWrap.appendChild(awardInput);
+    const actionsCol = document.createElement("span");
+    actionsCol.className = "attendance-col attendance-col--actions";
+    const renderActions = () => {
+      actionsCol.innerHTML = "";
+      const current = row.dataset.bucket;
+      const targets = Object.keys(BUCKET_LABEL).filter((b) => b !== current);
+      for (const target of targets) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "attendance-move-btn";
+        btn.textContent = `\u2192 ${BUCKET_LABEL[target]}`;
+        btn.addEventListener("click", () => moveTo(target));
+        actionsCol.appendChild(btn);
+      }
+    };
+    const moveTo = (target) => {
+      row.dataset.bucket = target;
+      row.classList.remove(
+        "attendance-row--attended",
+        "attendance-row--excused",
+        "attendance-row--unexcused",
+        "attendance-row--dns"
+      );
+      row.classList.add(`attendance-row--${target}`);
+      pointsInput.value = bucketDefaultPoints(target, raidSettings);
+      renderActions();
+      const targetList = listFor(target);
+      targetList.appendChild(row);
+      sortAttendanceList(targetList);
+    };
+    renderActions();
+    row.appendChild(name);
+    row.appendChild(pointsWrap);
+    row.appendChild(awardWrap);
+    row.appendChild(actionsCol);
+    return row;
+  }
+  function buildBucketListHeader() {
+    const header = document.createElement("div");
+    header.className = "attendance-row attendance-row--header";
+    header.innerHTML = `<span class="attendance-col attendance-col--name">Name</span><span class="attendance-col attendance-col--points">Points</span><span class="attendance-col attendance-col--award">Award to</span><span class="attendance-col attendance-col--actions">Actions</span>`;
+    return header;
+  }
   function buildAttendanceForm(event, eventId, raidSettings, channelId, onSuccess) {
     const container = document.createElement("div");
     container.className = "attendance-form";
@@ -59863,64 +59939,43 @@ If you are trying to annotate ${containerName} with application data, use the '$
     header.appendChild(titleEl);
     header.appendChild(meta);
     container.appendChild(header);
-    const allAttendees = event.signUps.filter((s) => s.className !== "Absence").sort((a, b) => roleSort(a.roleName) - roleSort(b.roleName));
+    const allAttendees = event.signUps.filter((s) => s.className !== "Absence");
     const attendees = allAttendees.filter((s) => findRosterName(s.name) !== "");
     const unknownAttendees = allAttendees.filter((s) => findRosterName(s.name) === "");
-    const absences = event.signUps.filter((s) => s.className === "Absence");
-    const list = document.createElement("div");
-    list.className = "attendance-list";
-    const listHeader = document.createElement("div");
-    listHeader.className = "attendance-row attendance-row--header";
-    listHeader.innerHTML = `<span class="attendance-col attendance-col--name">Name</span><span class="attendance-col attendance-col--class">Class</span><span class="attendance-col attendance-col--spec">Spec</span><span class="attendance-col attendance-col--role">Role</span><span class="attendance-col attendance-col--points">Award</span><span class="attendance-col attendance-col--award">Award to</span><span class="attendance-col attendance-col--check">Attended</span>`;
-    list.appendChild(listHeader);
+    const matchedAbsences = event.signUps.filter((s) => s.className === "Absence").filter((s) => findRosterName(s.name) !== "");
+    const attendedList = document.createElement("div");
+    attendedList.className = "attendance-list";
+    attendedList.appendChild(buildBucketListHeader());
+    const excusedList = document.createElement("div");
+    excusedList.className = "attendance-list";
+    excusedList.appendChild(buildBucketListHeader());
+    const unexcusedList = document.createElement("div");
+    unexcusedList.className = "attendance-list";
+    unexcusedList.appendChild(buildBucketListHeader());
+    const dnsList = document.createElement("div");
+    dnsList.className = "attendance-list";
+    dnsList.appendChild(buildBucketListHeader());
+    const listFor = (b) => {
+      switch (b) {
+        case "attended":
+          return attendedList;
+        case "excused":
+          return excusedList;
+        case "unexcused":
+          return unexcusedList;
+        case "dns":
+          return dnsList;
+      }
+    };
     attendees.forEach((signUp) => {
-      const row = document.createElement("label");
-      row.className = "attendance-row";
-      const name = document.createElement("span");
-      name.className = "attendance-col attendance-col--name";
-      name.textContent = signUp.name;
-      const cls = document.createElement("span");
-      cls.className = "attendance-col attendance-col--class";
-      cls.textContent = signUp.className ?? "";
-      const spec = document.createElement("span");
-      spec.className = "attendance-col attendance-col--spec";
-      spec.textContent = signUp.specName ?? "";
-      const role = document.createElement("span");
-      role.className = "attendance-col attendance-col--role";
-      role.textContent = signUp.roleName ?? "";
-      const pointsWrap = document.createElement("span");
-      pointsWrap.className = "attendance-col attendance-col--points";
-      const pointsInput = document.createElement("input");
-      pointsInput.type = "text";
-      pointsInput.className = "attendance-points-input";
-      pointsInput.value = raidSettings.awardForCompletion || "0";
-      pointsInput.addEventListener("click", (e) => e.preventDefault());
-      pointsWrap.appendChild(pointsInput);
-      const awardWrap = document.createElement("span");
-      awardWrap.className = "attendance-col attendance-col--award";
-      const awardInput = document.createElement("input");
-      awardInput.type = "text";
-      awardInput.className = "attendance-award-input";
-      awardInput.value = findRosterName(signUp.name);
-      awardInput.addEventListener("click", (e) => e.preventDefault());
-      awardWrap.appendChild(awardInput);
-      const checkWrap = document.createElement("span");
-      checkWrap.className = "attendance-col attendance-col--check";
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.checked = true;
-      checkbox.className = "attendance-checkbox";
-      checkbox.dataset.userId = signUp.userId;
-      checkbox.dataset.name = signUp.name;
-      checkWrap.appendChild(checkbox);
-      row.appendChild(name);
-      row.appendChild(cls);
-      row.appendChild(spec);
-      row.appendChild(role);
-      row.appendChild(pointsWrap);
-      row.appendChild(awardWrap);
-      row.appendChild(checkWrap);
-      list.appendChild(row);
+      const row = buildMovableRow(
+        "attended",
+        findRosterName(signUp.name),
+        signUp.name,
+        raidSettings,
+        listFor
+      );
+      attendedList.appendChild(row);
     });
     const unknownList = document.createElement("div");
     unknownList.className = "attendance-list";
@@ -59937,7 +59992,7 @@ If you are trying to annotate ${containerName} with application data, use the '$
       unknownSection.appendChild(unknownHint);
       const unknownHeader = document.createElement("div");
       unknownHeader.className = "attendance-row attendance-row--header";
-      unknownHeader.innerHTML = `<span class="attendance-col attendance-col--name">Sign-up Name</span><span class="attendance-col attendance-col--class">Class</span><span class="attendance-col attendance-col--spec">Spec</span><span class="attendance-col attendance-col--role">Role</span><span class="attendance-col attendance-col--points">Award</span><span class="attendance-col attendance-col--award">Credit to</span><span class="attendance-col attendance-col--check">Attended</span>`;
+      unknownHeader.innerHTML = `<span class="attendance-col attendance-col--name">Sign-up Name</span><span class="attendance-col attendance-col--points">Award</span><span class="attendance-col attendance-col--award">Credit to</span><span class="attendance-col attendance-col--check">Attended</span>`;
       unknownList.appendChild(unknownHeader);
       const rosterSorted = rosterStore.getAll().slice().sort((a, b) => a.name.localeCompare(b.name));
       unknownAttendees.forEach((signUp) => {
@@ -59946,15 +60001,6 @@ If you are trying to annotate ${containerName} with application data, use the '$
         const name = document.createElement("span");
         name.className = "attendance-col attendance-col--name";
         name.textContent = signUp.name;
-        const cls = document.createElement("span");
-        cls.className = "attendance-col attendance-col--class";
-        cls.textContent = signUp.className ?? "";
-        const spec = document.createElement("span");
-        spec.className = "attendance-col attendance-col--spec";
-        spec.textContent = signUp.specName ?? "";
-        const role = document.createElement("span");
-        role.className = "attendance-col attendance-col--role";
-        role.textContent = signUp.roleName ?? "";
         const pointsWrap = document.createElement("span");
         pointsWrap.className = "attendance-col attendance-col--points";
         const pointsInput = document.createElement("input");
@@ -59989,9 +60035,6 @@ If you are trying to annotate ${containerName} with application data, use the '$
         checkbox.dataset.name = signUp.name;
         checkWrap.appendChild(checkbox);
         row.appendChild(name);
-        row.appendChild(cls);
-        row.appendChild(spec);
-        row.appendChild(role);
         row.appendChild(pointsWrap);
         row.appendChild(awardWrap);
         row.appendChild(checkWrap);
@@ -60000,20 +60043,40 @@ If you are trying to annotate ${containerName} with application data, use the '$
       unknownSection.appendChild(unknownList);
       container.appendChild(unknownSection);
     }
-    container.appendChild(list);
-    if (absences.length > 0) {
-      const absSection = document.createElement("div");
-      absSection.className = "attendance-absences";
-      const absTitle = document.createElement("h3");
-      absTitle.className = "attendance-absences-title";
-      absTitle.textContent = `Absences (${absences.length})`;
-      absSection.appendChild(absTitle);
-      const absNames = document.createElement("div");
-      absNames.className = "attendance-absences-list";
-      absNames.textContent = absences.map((s) => s.name).join(", ");
-      absSection.appendChild(absNames);
-      container.appendChild(absSection);
-    }
+    const attendedSection = document.createElement("div");
+    attendedSection.className = "attendance-bucket";
+    const attendedTitle = document.createElement("h3");
+    attendedTitle.className = "attendance-absences-title";
+    attendedTitle.textContent = "Attended";
+    attendedSection.appendChild(attendedTitle);
+    attendedSection.appendChild(attendedList);
+    container.appendChild(attendedSection);
+    matchedAbsences.forEach((signUp) => {
+      const row = buildMovableRow(
+        "excused",
+        findRosterName(signUp.name),
+        signUp.name,
+        raidSettings,
+        listFor
+      );
+      excusedList.appendChild(row);
+    });
+    const excusedSection = document.createElement("div");
+    excusedSection.className = "attendance-bucket";
+    const excusedTitle = document.createElement("h3");
+    excusedTitle.className = "attendance-absences-title";
+    excusedTitle.textContent = "Excused absent";
+    excusedSection.appendChild(excusedTitle);
+    excusedSection.appendChild(excusedList);
+    container.appendChild(excusedSection);
+    const unexcusedSection = document.createElement("div");
+    unexcusedSection.className = "attendance-bucket";
+    const unexcusedTitle = document.createElement("h3");
+    unexcusedTitle.className = "attendance-absences-title";
+    unexcusedTitle.textContent = "Unexcused absent";
+    unexcusedSection.appendChild(unexcusedTitle);
+    unexcusedSection.appendChild(unexcusedList);
+    container.appendChild(unexcusedSection);
     const allSignUpNames = /* @__PURE__ */ new Set();
     for (const s of event.signUps) {
       const rosterName = findRosterName(s.name);
@@ -60021,48 +60084,27 @@ If you are trying to annotate ${containerName} with application data, use the '$
     }
     const roster = rosterStore.getAll();
     const notSignedUp = roster.filter((r) => r.name && !allSignUpNames.has(r.name.toLowerCase()));
+    notSignedUp.forEach((member) => {
+      const row = buildMovableRow(
+        "dns",
+        member.name,
+        member.name,
+        raidSettings,
+        listFor
+      );
+      dnsList.appendChild(row);
+    });
     const dnsSection = document.createElement("div");
-    dnsSection.className = "attendance-absences";
+    dnsSection.className = "attendance-bucket";
     const dnsTitle = document.createElement("h3");
     dnsTitle.className = "attendance-absences-title";
-    dnsTitle.textContent = `Did not sign up (${notSignedUp.length})`;
+    dnsTitle.textContent = "Did not sign up";
     dnsSection.appendChild(dnsTitle);
-    const dnsList = document.createElement("div");
-    dnsList.className = "attendance-list";
-    const dnsHeader = document.createElement("div");
-    dnsHeader.className = "attendance-row attendance-row--header";
-    dnsHeader.innerHTML = `<span class="attendance-col attendance-col--name">Name</span><span class="attendance-col attendance-col--points">Deduction</span><span class="attendance-col attendance-col--check">Apply</span>`;
-    dnsList.appendChild(dnsHeader);
-    const didNotSignUpDeduction = raidSettings.didNotSignUp || "0";
-    for (const member of notSignedUp) {
-      const row = document.createElement("label");
-      row.className = "attendance-row attendance-row--dns";
-      const nameCol = document.createElement("span");
-      nameCol.className = "attendance-col attendance-col--name";
-      nameCol.textContent = member.name;
-      const deductWrap = document.createElement("span");
-      deductWrap.className = "attendance-col attendance-col--points";
-      const deductInput = document.createElement("input");
-      deductInput.type = "text";
-      deductInput.className = "attendance-points-input";
-      deductInput.value = `-${didNotSignUpDeduction}`;
-      deductInput.addEventListener("click", (e) => e.preventDefault());
-      deductWrap.appendChild(deductInput);
-      const checkWrap = document.createElement("span");
-      checkWrap.className = "attendance-col attendance-col--check";
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.checked = true;
-      checkbox.className = "attendance-dns-checkbox";
-      checkbox.dataset.rosterName = member.name;
-      checkWrap.appendChild(checkbox);
-      row.appendChild(nameCol);
-      row.appendChild(deductWrap);
-      row.appendChild(checkWrap);
-      dnsList.appendChild(row);
-    }
     dnsSection.appendChild(dnsList);
     container.appendChild(dnsSection);
+    sortAttendanceList(attendedList);
+    sortAttendanceList(excusedList);
+    sortAttendanceList(dnsList);
     const footer = document.createElement("div");
     footer.className = "attendance-footer";
     const footerSpinner = document.createElement("div");
@@ -60083,9 +60125,16 @@ If you are trying to annotate ${containerName} with application data, use the '$
       footerStatus.textContent = "";
       let succeeded = false;
       try {
-        await confirmAndAward([list, unknownList], dnsList, event, eventId, channelId, (msg) => {
-          footerStatus.textContent = msg;
-        });
+        await confirmAndAward(
+          [attendedList, excusedList, unexcusedList, dnsList],
+          unknownList,
+          event,
+          eventId,
+          channelId,
+          (msg) => {
+            footerStatus.textContent = msg;
+          }
+        );
         succeeded = true;
       } catch (err) {
         footerStatus.textContent = `Failed: ${err instanceof Error ? err.message : String(err)}`;
@@ -60115,30 +60164,35 @@ If you are trying to annotate ${containerName} with application data, use the '$
     const rows = all.map((e) => [e.eventId, e.title, e.date, e.time, e.leaderName, e.channelId, e.importedAt]);
     return window.api.writeSheet(RH_IMPORT_HISTORY_SHEET, [RH_IMPORT_HISTORY_HEADERS, ...rows]);
   }
-  async function confirmAndAward(attendanceLists, dnsList, event, eventId, channelId, onProgress = () => {
+  async function confirmAndAward(bucketLists, unknownList, event, eventId, channelId, onProgress = () => {
   }) {
     const roster = rosterStore.getAll();
     const rosterByName = /* @__PURE__ */ new Map();
     for (const entry of roster) {
       rosterByName.set(entry.name.toLowerCase(), entry);
     }
+    const maxRollMod = parseFloat(settingsStore.get("Maximum rollModifier"));
+    const minRollMod = parseFloat(settingsStore.get("Minimum rollModifier"));
+    const applyDelta = (rosterEntry, points) => {
+      const currentMod = parseFloat(rosterEntry.rollModifier) || 0;
+      let newMod = parseFloat((currentMod + points).toFixed(4));
+      if (points >= 0 && !isNaN(maxRollMod) && newMod > maxRollMod) newMod = maxRollMod;
+      if (points < 0 && !isNaN(minRollMod) && newMod < minRollMod) newMod = minRollMod;
+      rosterEntry.rollModifier = String(newMod);
+    };
     const notFound = [];
-    const rows = [];
-    for (const l of attendanceLists) {
-      rows.push(...Array.from(l.querySelectorAll(".attendance-row:not(.attendance-row--header)")));
+    const bucketRows = [];
+    for (const l of bucketLists) {
+      bucketRows.push(...Array.from(l.querySelectorAll(".attendance-row:not(.attendance-row--header)")));
     }
-    for (const row of rows) {
-      const checkbox = row.querySelector(".attendance-checkbox");
-      if (!checkbox?.checked) continue;
+    for (const row of bucketRows) {
       const awardToInput = row.querySelector(".attendance-award-input");
       const pointsInput = row.querySelector(".attendance-points-input");
       const awardTo = awardToInput?.value.trim() ?? "";
       const points = parseFloat(pointsInput?.value ?? "0") || 0;
       if (!awardTo) {
-        if (!row.classList.contains("attendance-row--unknown")) {
-          const signUpName = row.querySelector(".attendance-col--name")?.textContent ?? "Unknown";
-          notFound.push(signUpName);
-        }
+        const displayName = row.querySelector(".attendance-col--name")?.textContent ?? "Unknown";
+        notFound.push(displayName);
         continue;
       }
       const rosterEntry = rosterByName.get(awardTo.toLowerCase());
@@ -60146,30 +60200,23 @@ If you are trying to annotate ${containerName} with application data, use the '$
         notFound.push(awardTo);
         continue;
       }
-      const currentMod = parseFloat(rosterEntry.rollModifier) || 0;
-      let newMod = parseFloat((currentMod + points).toFixed(4));
-      const maxRollMod = parseFloat(settingsStore.get("Maximum rollModifier"));
-      if (!isNaN(maxRollMod) && newMod > maxRollMod) {
-        newMod = maxRollMod;
-      }
-      rosterEntry.rollModifier = String(newMod);
+      applyDelta(rosterEntry, points);
     }
-    const dnsRows = Array.from(dnsList.querySelectorAll(".attendance-row--dns"));
-    for (const row of dnsRows) {
-      const checkbox = row.querySelector(".attendance-dns-checkbox");
+    const unknownRows = Array.from(unknownList.querySelectorAll(".attendance-row:not(.attendance-row--header)"));
+    for (const row of unknownRows) {
+      const checkbox = row.querySelector(".attendance-checkbox");
       if (!checkbox?.checked) continue;
-      const rosterName = checkbox.dataset.rosterName ?? "";
+      const awardToInput = row.querySelector(".attendance-award-input");
       const pointsInput = row.querySelector(".attendance-points-input");
-      const deduction = parseFloat(pointsInput?.value ?? "0") || 0;
-      const rosterEntry = rosterByName.get(rosterName.toLowerCase());
-      if (!rosterEntry) continue;
-      const currentMod = parseFloat(rosterEntry.rollModifier) || 0;
-      let newMod = parseFloat((currentMod + deduction).toFixed(4));
-      const minRollMod = parseFloat(settingsStore.get("Minimum rollModifier"));
-      if (!isNaN(minRollMod) && newMod < minRollMod) {
-        newMod = minRollMod;
+      const awardTo = awardToInput?.value.trim() ?? "";
+      const points = parseFloat(pointsInput?.value ?? "0") || 0;
+      if (!awardTo) continue;
+      const rosterEntry = rosterByName.get(awardTo.toLowerCase());
+      if (!rosterEntry) {
+        notFound.push(awardTo);
+        continue;
       }
-      rosterEntry.rollModifier = String(newMod);
+      applyDelta(rosterEntry, points);
     }
     rosterStore.replaceAll(roster);
     const rosterRows = roster.map((e) => [
@@ -60351,6 +60398,15 @@ This cannot be undone.`);
       body.appendChild(errEl);
     });
   }
+  function parseAttendanceRows(rows) {
+    if (rows.length < 2) return [];
+    return rows.slice(1).map((row) => ({
+      date: row[0]?.trim() ?? "",
+      eventName: row[1]?.trim() ?? "",
+      link: row[2]?.trim() ?? "",
+      roster: row[3] ?? ""
+    }));
+  }
   function createAttendancePage() {
     const page = document.createElement("div");
     page.className = "page attendance-page";
@@ -60359,7 +60415,14 @@ This cannot be undone.`);
     const newEntryBtn = document.createElement("button");
     newEntryBtn.className = "btn btn--primary";
     newEntryBtn.textContent = "New Entry";
+    const refreshBtn = document.createElement("button");
+    refreshBtn.className = "btn";
+    refreshBtn.textContent = "Refresh previous events";
+    const refreshStatus = document.createElement("span");
+    refreshStatus.className = "raid-status";
     toolbar.appendChild(newEntryBtn);
+    toolbar.appendChild(refreshBtn);
+    toolbar.appendChild(refreshStatus);
     page.appendChild(toolbar);
     const historyContainer = document.createElement("div");
     historyContainer.className = "attendance-history-container";
@@ -60372,6 +60435,25 @@ This cannot be undone.`);
         const channelId = String(pickedEvent.channelId ?? "");
         showAttendanceFormModal(eventId, raidSettings, channelId);
       });
+    });
+    refreshBtn.addEventListener("click", async () => {
+      refreshBtn.disabled = true;
+      refreshStatus.textContent = "Refreshing...";
+      refreshStatus.className = "raid-status";
+      try {
+        const rows = await window.api.fetchSheet(ATTENDANCE_SHEET);
+        attendanceStore.replaceAll(parseAttendanceRows(rows));
+        refreshStatus.textContent = "Refreshed.";
+        refreshStatus.className = "raid-status raid-status--success";
+        setTimeout(() => {
+          refreshStatus.textContent = "";
+        }, 3e3);
+      } catch (err) {
+        refreshStatus.textContent = `Refresh failed: ${err instanceof Error ? err.message : err}`;
+        refreshStatus.className = "raid-status raid-status--error";
+      } finally {
+        refreshBtn.disabled = false;
+      }
     });
     return page;
   }
@@ -60878,49 +60960,25 @@ This cannot be undone.`);
   }
 
   // src/renderer/components/pages/RaidPage.ts
-  function showEventPicker2(onSubmit) {
-    const overlay = document.createElement("div");
-    overlay.className = "modal-overlay";
-    const modal = document.createElement("div");
-    modal.className = "modal modal--wide";
-    const title = document.createElement("h3");
-    title.className = "modal__title";
-    title.textContent = "Load Raid Helper Event";
-    modal.appendChild(title);
-    const picker = createRhEventPicker({
-      onSelect: (ev) => {
-        overlay.remove();
-        onSubmit(String(ev.id ?? ""));
-      }
-    });
-    modal.appendChild(picker);
-    const actions = document.createElement("div");
-    actions.className = "modal__actions";
-    const cancelBtn = document.createElement("button");
-    cancelBtn.className = "btn";
-    cancelBtn.textContent = "Cancel";
-    cancelBtn.addEventListener("click", () => overlay.remove());
-    actions.appendChild(cancelBtn);
-    modal.appendChild(actions);
-    overlay.appendChild(modal);
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) overlay.remove();
-    });
-    document.body.appendChild(overlay);
+  function toExportEntries(roster) {
+    return roster.map((r) => ({
+      name: r.name,
+      raidHelperName: r.raidHelperName,
+      rollModifier: r.rollModifier
+    }));
   }
-  function buildResultForm(matches) {
+  function buildResultForm(entries) {
     const container = document.createElement("div");
     container.className = "raid-form";
     const list = document.createElement("div");
     list.className = "raid-list";
     const listHeader = document.createElement("div");
     listHeader.className = "raid-row raid-row--header";
-    listHeader.innerHTML = `<span class="raid-col raid-col--name">Name</span><span class="raid-col raid-col--rh-name">Raid-Helper Name</span><span class="raid-col raid-col--modifier">Roll Modifier</span><span class="raid-col raid-col--event-name">Event Sign-Up Name</span>`;
+    listHeader.innerHTML = `<span class="raid-col raid-col--name">Name</span><span class="raid-col raid-col--rh-name">Raid-Helper Name</span><span class="raid-col raid-col--modifier">Roll Modifier</span>`;
     list.appendChild(listHeader);
-    for (const entry of matches) {
+    for (const entry of entries) {
       const row = document.createElement("div");
       row.className = "raid-row";
-      if (!entry.name) row.classList.add("raid-row--unmatched");
       const nameCol = document.createElement("span");
       nameCol.className = "raid-col raid-col--name";
       nameCol.textContent = entry.name || "\u2014";
@@ -60930,33 +60988,39 @@ This cannot be undone.`);
       const modCol = document.createElement("span");
       modCol.className = "raid-col raid-col--modifier";
       modCol.textContent = entry.rollModifier || "\u2014";
-      const eventNameCol = document.createElement("span");
-      eventNameCol.className = "raid-col raid-col--event-name";
-      eventNameCol.textContent = entry.eventName;
       row.appendChild(nameCol);
       row.appendChild(rhNameCol);
       row.appendChild(modCol);
-      row.appendChild(eventNameCol);
       list.appendChild(row);
     }
     container.appendChild(list);
-    const footer = document.createElement("div");
-    footer.className = "raid-footer";
-    const statusMsg = document.createElement("span");
-    statusMsg.className = "raid-status";
-    footer.appendChild(statusMsg);
+    return container;
+  }
+  function createRaidPage() {
+    const page = document.createElement("div");
+    page.className = "page raid-page";
+    const toolbar = document.createElement("div");
+    toolbar.className = "loot-history-toolbar";
     const exportBtn = document.createElement("button");
     exportBtn.className = "btn btn--primary";
     exportBtn.textContent = "Export to clipboard";
+    const statusMsg = document.createElement("span");
+    statusMsg.className = "raid-status";
+    toolbar.appendChild(exportBtn);
+    toolbar.appendChild(statusMsg);
+    page.appendChild(toolbar);
+    const content = document.createElement("div");
+    content.className = "raid-content";
+    page.appendChild(content);
+    const render = () => {
+      const entries = toExportEntries(rosterStore.getAll());
+      content.innerHTML = "";
+      content.appendChild(buildResultForm(entries));
+    };
     exportBtn.addEventListener("click", async () => {
-      const data = matches.map((m) => ({
-        name: m.name,
-        raidHelperName: m.raidHelperName,
-        rollModifier: m.rollModifier,
-        eventName: m.eventName
-      }));
+      const entries = toExportEntries(rosterStore.getAll());
       try {
-        await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+        await navigator.clipboard.writeText(JSON.stringify(entries, null, 2));
         statusMsg.textContent = "Copied to clipboard!";
         statusMsg.className = "raid-status raid-status--success";
         setTimeout(() => {
@@ -60967,55 +61031,8 @@ This cannot be undone.`);
         statusMsg.className = "raid-status raid-status--error";
       }
     });
-    footer.appendChild(exportBtn);
-    container.appendChild(footer);
-    return container;
-  }
-  function createRaidPage() {
-    const page = document.createElement("div");
-    page.className = "page raid-page";
-    const toolbar = document.createElement("div");
-    toolbar.className = "loot-history-toolbar";
-    const exportBtn = document.createElement("button");
-    exportBtn.className = "btn btn--primary";
-    exportBtn.textContent = "Export Roll Modifiers";
-    toolbar.appendChild(exportBtn);
-    page.appendChild(toolbar);
-    const content = document.createElement("div");
-    content.className = "raid-content";
-    page.appendChild(content);
-    exportBtn.addEventListener("click", () => {
-      showEventPicker2(async (eventId) => {
-        content.innerHTML = "";
-        const spinner = document.createElement("div");
-        spinner.className = "attendance-loading";
-        spinner.innerHTML = '<div class="spinner"></div><span>Loading event data...</span>';
-        content.appendChild(spinner);
-        try {
-          const event = await window.api.fetchRaidHelperEvent(eventId);
-          const roster = rosterStore.getAll();
-          const signUps = event.signUps.filter((s) => s.className !== "Absence");
-          const matches = signUps.map((signUp) => {
-            const lower = signUp.name.toLowerCase();
-            const rosterEntry = roster.find((r) => r.raidHelperName.toLowerCase() === lower) ?? roster.find((r) => r.name.toLowerCase() === lower);
-            return {
-              name: rosterEntry?.name ?? "",
-              raidHelperName: rosterEntry?.raidHelperName ?? "",
-              rollModifier: rosterEntry?.rollModifier ?? "",
-              eventName: signUp.name
-            };
-          });
-          content.innerHTML = "";
-          content.appendChild(buildResultForm(matches));
-        } catch (err) {
-          content.innerHTML = "";
-          const errEl = document.createElement("div");
-          errEl.className = "attendance-error";
-          errEl.textContent = `Failed to load event: ${err instanceof Error ? err.message : err}`;
-          content.appendChild(errEl);
-        }
-      });
-    });
+    rosterStore.subscribe(render);
+    render();
     return page;
   }
 
@@ -61074,7 +61091,7 @@ This cannot be undone.`);
       didNotSignUp: row[6]?.trim() ?? ""
     }));
   }
-  function parseAttendanceRows(rows) {
+  function parseAttendanceRows2(rows) {
     if (rows.length < 2) return [];
     return rows.slice(1).map((row) => ({
       date: row[0]?.trim() ?? "",
@@ -61113,13 +61130,11 @@ This cannot be undone.`);
         }).catch((err) => console.error("Preload roster failed:", err))
       );
     }
-    if (attendanceStore.getAll().length === 0) {
-      fetches.push(
-        window.api.fetchSheet("attendance").then((rows) => {
-          attendanceStore.replaceAll(parseAttendanceRows(rows));
-        }).catch((err) => console.error("Preload attendance failed:", err))
-      );
-    }
+    fetches.push(
+      window.api.fetchSheet("attendance").then((rows) => {
+        attendanceStore.replaceAll(parseAttendanceRows2(rows));
+      }).catch((err) => console.error("Preload attendance failed:", err))
+    );
     if (settingsStore.getAll().length === 0) {
       fetches.push(
         window.api.fetchSheet("settings").then((rows) => {
@@ -61159,7 +61174,7 @@ This cannot be undone.`);
     banner.alt = "From the Ashes";
     const version = document.createElement("span");
     version.className = "app-version";
-    version.textContent = "v1.5.0";
+    version.textContent = "v1.6.0";
     bannerWrap.appendChild(banner);
     bannerWrap.appendChild(version);
     body.appendChild(bannerWrap);

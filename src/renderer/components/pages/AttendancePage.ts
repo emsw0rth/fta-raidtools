@@ -31,16 +31,6 @@ function findRosterName(signUpName: string): string {
   return "";
 }
 
-function roleSort(roleName: string | undefined): number {
-  switch (roleName) {
-    case "Tanks": return 0;
-    case "Healers": return 1;
-    case "Melee": return 2;
-    case "Ranged": return 3;
-    default: return 4;
-  }
-}
-
 function showEventPicker(
   onSubmit: (event: RaidHelperServerEventListItem, raidSettings: RaidSettingsEntry) => void,
 ): void {
@@ -135,6 +125,120 @@ function showEventPicker(
   raidSelect.focus();
 }
 
+type AttendanceBucket = "attended" | "excused" | "unexcused" | "dns";
+
+const BUCKET_LABEL: Record<AttendanceBucket, string> = {
+  attended: "Attended",
+  excused: "Excused absent",
+  unexcused: "Unexcused absent",
+  dns: "Did not sign up",
+};
+
+function bucketDefaultPoints(bucket: AttendanceBucket, raidSettings: RaidSettingsEntry): string {
+  switch (bucket) {
+    case "attended": return raidSettings.awardForCompletion || "0";
+    case "excused": return "0";
+    case "unexcused": return `-${raidSettings.absenceUnexcused || "0"}`;
+    case "dns": return `-${raidSettings.didNotSignUp || "0"}`;
+  }
+}
+
+function sortAttendanceList(list: HTMLElement): void {
+  const rows = Array.from(list.querySelectorAll(".attendance-row:not(.attendance-row--header)")) as HTMLElement[];
+  rows
+    .sort((a, b) => {
+      const aName = a.querySelector(".attendance-col--name")?.textContent ?? "";
+      const bName = b.querySelector(".attendance-col--name")?.textContent ?? "";
+      return aName.localeCompare(bName);
+    })
+    .forEach((row) => list.appendChild(row));
+}
+
+function buildMovableRow(
+  bucket: AttendanceBucket,
+  rosterName: string,
+  displayName: string,
+  raidSettings: RaidSettingsEntry,
+  listFor: (b: AttendanceBucket) => HTMLElement,
+): HTMLElement {
+  const row = document.createElement("div");
+  row.className = `attendance-row attendance-row--${bucket}`;
+  row.dataset.bucket = bucket;
+
+  const name = document.createElement("span");
+  name.className = "attendance-col attendance-col--name";
+  name.textContent = displayName;
+
+  const pointsWrap = document.createElement("span");
+  pointsWrap.className = "attendance-col attendance-col--points";
+  const pointsInput = document.createElement("input");
+  pointsInput.type = "text";
+  pointsInput.className = "attendance-points-input";
+  pointsInput.value = bucketDefaultPoints(bucket, raidSettings);
+  pointsWrap.appendChild(pointsInput);
+
+  const awardWrap = document.createElement("span");
+  awardWrap.className = "attendance-col attendance-col--award";
+  const awardInput = document.createElement("input");
+  awardInput.type = "text";
+  awardInput.className = "attendance-award-input";
+  awardInput.value = rosterName;
+  awardWrap.appendChild(awardInput);
+
+  const actionsCol = document.createElement("span");
+  actionsCol.className = "attendance-col attendance-col--actions";
+
+  const renderActions = () => {
+    actionsCol.innerHTML = "";
+    const current = row.dataset.bucket as AttendanceBucket;
+    const targets = (Object.keys(BUCKET_LABEL) as AttendanceBucket[]).filter((b) => b !== current);
+    for (const target of targets) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "attendance-move-btn";
+      btn.textContent = `→ ${BUCKET_LABEL[target]}`;
+      btn.addEventListener("click", () => moveTo(target));
+      actionsCol.appendChild(btn);
+    }
+  };
+
+  const moveTo = (target: AttendanceBucket) => {
+    row.dataset.bucket = target;
+    row.classList.remove(
+      "attendance-row--attended",
+      "attendance-row--excused",
+      "attendance-row--unexcused",
+      "attendance-row--dns",
+    );
+    row.classList.add(`attendance-row--${target}`);
+    pointsInput.value = bucketDefaultPoints(target, raidSettings);
+    renderActions();
+    const targetList = listFor(target);
+    targetList.appendChild(row);
+    sortAttendanceList(targetList);
+  };
+
+  renderActions();
+
+  row.appendChild(name);
+  row.appendChild(pointsWrap);
+  row.appendChild(awardWrap);
+  row.appendChild(actionsCol);
+
+  return row;
+}
+
+function buildBucketListHeader(): HTMLElement {
+  const header = document.createElement("div");
+  header.className = "attendance-row attendance-row--header";
+  header.innerHTML =
+    `<span class="attendance-col attendance-col--name">Name</span>` +
+    `<span class="attendance-col attendance-col--points">Points</span>` +
+    `<span class="attendance-col attendance-col--award">Award to</span>` +
+    `<span class="attendance-col attendance-col--actions">Actions</span>`;
+  return header;
+}
+
 function buildAttendanceForm(
   event: RaidHelperEvent,
   eventId: string,
@@ -161,90 +265,52 @@ function buildAttendanceForm(
   header.appendChild(meta);
   container.appendChild(header);
 
-  // Filter out absences and sort by role
-  const allAttendees = event.signUps
-    .filter((s) => s.className !== "Absence")
-    .sort((a, b) => roleSort(a.roleName) - roleSort(b.roleName));
+  const allAttendees = event.signUps.filter((s) => s.className !== "Absence");
 
   // Split into matched (have a roster identity) and unknown (no roster match —
   // could be a pug, new member, or a typo in the sign-up name).
   const attendees = allAttendees.filter((s) => findRosterName(s.name) !== "");
   const unknownAttendees = allAttendees.filter((s) => findRosterName(s.name) === "");
 
-  const absences = event.signUps.filter((s) => s.className === "Absence");
+  const matchedAbsences = event.signUps
+    .filter((s) => s.className === "Absence")
+    .filter((s) => findRosterName(s.name) !== "");
 
-  // Attendee list
-  const list = document.createElement("div");
-  list.className = "attendance-list";
+  // Four movable lists, declared up front so row move handlers can reference them.
+  const attendedList = document.createElement("div");
+  attendedList.className = "attendance-list";
+  attendedList.appendChild(buildBucketListHeader());
 
-  const listHeader = document.createElement("div");
-  listHeader.className = "attendance-row attendance-row--header";
-  listHeader.innerHTML =
-    `<span class="attendance-col attendance-col--name">Name</span>` +
-    `<span class="attendance-col attendance-col--class">Class</span>` +
-    `<span class="attendance-col attendance-col--spec">Spec</span>` +
-    `<span class="attendance-col attendance-col--role">Role</span>` +
-    `<span class="attendance-col attendance-col--points">Award</span>` +
-    `<span class="attendance-col attendance-col--award">Award to</span>` +
-    `<span class="attendance-col attendance-col--check">Attended</span>`;
-  list.appendChild(listHeader);
+  const excusedList = document.createElement("div");
+  excusedList.className = "attendance-list";
+  excusedList.appendChild(buildBucketListHeader());
+
+  const unexcusedList = document.createElement("div");
+  unexcusedList.className = "attendance-list";
+  unexcusedList.appendChild(buildBucketListHeader());
+
+  const dnsList = document.createElement("div");
+  dnsList.className = "attendance-list";
+  dnsList.appendChild(buildBucketListHeader());
+
+  const listFor = (b: AttendanceBucket): HTMLElement => {
+    switch (b) {
+      case "attended": return attendedList;
+      case "excused": return excusedList;
+      case "unexcused": return unexcusedList;
+      case "dns": return dnsList;
+    }
+  };
 
   attendees.forEach((signUp) => {
-    const row = document.createElement("label");
-    row.className = "attendance-row";
-
-    const name = document.createElement("span");
-    name.className = "attendance-col attendance-col--name";
-    name.textContent = signUp.name;
-
-    const cls = document.createElement("span");
-    cls.className = "attendance-col attendance-col--class";
-    cls.textContent = signUp.className ?? "";
-
-    const spec = document.createElement("span");
-    spec.className = "attendance-col attendance-col--spec";
-    spec.textContent = signUp.specName ?? "";
-
-    const role = document.createElement("span");
-    role.className = "attendance-col attendance-col--role";
-    role.textContent = signUp.roleName ?? "";
-
-    const pointsWrap = document.createElement("span");
-    pointsWrap.className = "attendance-col attendance-col--points";
-    const pointsInput = document.createElement("input");
-    pointsInput.type = "text";
-    pointsInput.className = "attendance-points-input";
-    pointsInput.value = raidSettings.awardForCompletion || "0";
-    pointsInput.addEventListener("click", (e) => e.preventDefault());
-    pointsWrap.appendChild(pointsInput);
-
-    const awardWrap = document.createElement("span");
-    awardWrap.className = "attendance-col attendance-col--award";
-    const awardInput = document.createElement("input");
-    awardInput.type = "text";
-    awardInput.className = "attendance-award-input";
-    awardInput.value = findRosterName(signUp.name);
-    awardInput.addEventListener("click", (e) => e.preventDefault());
-    awardWrap.appendChild(awardInput);
-
-    const checkWrap = document.createElement("span");
-    checkWrap.className = "attendance-col attendance-col--check";
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = true;
-    checkbox.className = "attendance-checkbox";
-    checkbox.dataset.userId = signUp.userId;
-    checkbox.dataset.name = signUp.name;
-    checkWrap.appendChild(checkbox);
-
-    row.appendChild(name);
-    row.appendChild(cls);
-    row.appendChild(spec);
-    row.appendChild(role);
-    row.appendChild(pointsWrap);
-    row.appendChild(awardWrap);
-    row.appendChild(checkWrap);
-    list.appendChild(row);
+    const row = buildMovableRow(
+      "attended",
+      findRosterName(signUp.name),
+      signUp.name,
+      raidSettings,
+      listFor,
+    );
+    attendedList.appendChild(row);
   });
 
   // Unknown players section — sign-ups whose name didn't match any roster entry.
@@ -272,9 +338,6 @@ function buildAttendanceForm(
     unknownHeader.className = "attendance-row attendance-row--header";
     unknownHeader.innerHTML =
       `<span class="attendance-col attendance-col--name">Sign-up Name</span>` +
-      `<span class="attendance-col attendance-col--class">Class</span>` +
-      `<span class="attendance-col attendance-col--spec">Spec</span>` +
-      `<span class="attendance-col attendance-col--role">Role</span>` +
       `<span class="attendance-col attendance-col--points">Award</span>` +
       `<span class="attendance-col attendance-col--award">Credit to</span>` +
       `<span class="attendance-col attendance-col--check">Attended</span>`;
@@ -289,18 +352,6 @@ function buildAttendanceForm(
       const name = document.createElement("span");
       name.className = "attendance-col attendance-col--name";
       name.textContent = signUp.name;
-
-      const cls = document.createElement("span");
-      cls.className = "attendance-col attendance-col--class";
-      cls.textContent = signUp.className ?? "";
-
-      const spec = document.createElement("span");
-      spec.className = "attendance-col attendance-col--spec";
-      spec.textContent = signUp.specName ?? "";
-
-      const role = document.createElement("span");
-      role.className = "attendance-col attendance-col--role";
-      role.textContent = signUp.roleName ?? "";
 
       const pointsWrap = document.createElement("span");
       pointsWrap.className = "attendance-col attendance-col--points";
@@ -339,9 +390,6 @@ function buildAttendanceForm(
       checkWrap.appendChild(checkbox);
 
       row.appendChild(name);
-      row.appendChild(cls);
-      row.appendChild(spec);
-      row.appendChild(role);
       row.appendChild(pointsWrap);
       row.appendChild(awardWrap);
       row.appendChild(checkWrap);
@@ -352,93 +400,84 @@ function buildAttendanceForm(
     container.appendChild(unknownSection);
   }
 
-  container.appendChild(list);
+  // Attended section
+  const attendedSection = document.createElement("div");
+  attendedSection.className = "attendance-bucket";
+  const attendedTitle = document.createElement("h3");
+  attendedTitle.className = "attendance-absences-title";
+  attendedTitle.textContent = "Attended";
+  attendedSection.appendChild(attendedTitle);
+  attendedSection.appendChild(attendedList);
+  container.appendChild(attendedSection);
 
-  // Show absences section
-  if (absences.length > 0) {
-    const absSection = document.createElement("div");
-    absSection.className = "attendance-absences";
+  // Build excused-absent rows from sign-ups marked as Absence in Raid Helper.
+  // These default to a 0 deduction; the user can move them to "Unexcused absent" to apply one.
+  matchedAbsences.forEach((signUp) => {
+    const row = buildMovableRow(
+      "excused",
+      findRosterName(signUp.name),
+      signUp.name,
+      raidSettings,
+      listFor,
+    );
+    excusedList.appendChild(row);
+  });
 
-    const absTitle = document.createElement("h3");
-    absTitle.className = "attendance-absences-title";
-    absTitle.textContent = `Absences (${absences.length})`;
-    absSection.appendChild(absTitle);
+  // Excused absent section
+  const excusedSection = document.createElement("div");
+  excusedSection.className = "attendance-bucket";
+  const excusedTitle = document.createElement("h3");
+  excusedTitle.className = "attendance-absences-title";
+  excusedTitle.textContent = "Excused absent";
+  excusedSection.appendChild(excusedTitle);
+  excusedSection.appendChild(excusedList);
+  container.appendChild(excusedSection);
 
-    const absNames = document.createElement("div");
-    absNames.className = "attendance-absences-list";
-    absNames.textContent = absences.map((s) => s.name).join(", ");
-    absSection.appendChild(absNames);
+  // Unexcused absent section — starts empty; populated only by moves from other lists.
+  const unexcusedSection = document.createElement("div");
+  unexcusedSection.className = "attendance-bucket";
+  const unexcusedTitle = document.createElement("h3");
+  unexcusedTitle.className = "attendance-absences-title";
+  unexcusedTitle.textContent = "Unexcused absent";
+  unexcusedSection.appendChild(unexcusedTitle);
+  unexcusedSection.appendChild(unexcusedList);
+  container.appendChild(unexcusedSection);
 
-    container.appendChild(absSection);
-  }
-
-  // Build set of all roster names that participated in the event (attendees + absences)
+  // Build DNS rows from roster members not in the sign-ups
   const allSignUpNames = new Set<string>();
   for (const s of event.signUps) {
     const rosterName = findRosterName(s.name);
     if (rosterName) allSignUpNames.add(rosterName.toLowerCase());
   }
 
-  // Find roster members who did not sign up at all
   const roster = rosterStore.getAll();
   const notSignedUp = roster.filter((r) => r.name && !allSignUpNames.has(r.name.toLowerCase()));
 
-  // "Did not sign up" section
-  const dnsSection = document.createElement("div");
-  dnsSection.className = "attendance-absences";
+  notSignedUp.forEach((member) => {
+    const row = buildMovableRow(
+      "dns",
+      member.name,
+      member.name,
+      raidSettings,
+      listFor,
+    );
+    dnsList.appendChild(row);
+  });
 
+  // DNS section
+  const dnsSection = document.createElement("div");
+  dnsSection.className = "attendance-bucket";
   const dnsTitle = document.createElement("h3");
   dnsTitle.className = "attendance-absences-title";
-  dnsTitle.textContent = `Did not sign up (${notSignedUp.length})`;
+  dnsTitle.textContent = "Did not sign up";
   dnsSection.appendChild(dnsTitle);
-
-  const dnsList = document.createElement("div");
-  dnsList.className = "attendance-list";
-
-  const dnsHeader = document.createElement("div");
-  dnsHeader.className = "attendance-row attendance-row--header";
-  dnsHeader.innerHTML =
-    `<span class="attendance-col attendance-col--name">Name</span>` +
-    `<span class="attendance-col attendance-col--points">Deduction</span>` +
-    `<span class="attendance-col attendance-col--check">Apply</span>`;
-  dnsList.appendChild(dnsHeader);
-
-  const didNotSignUpDeduction = raidSettings.didNotSignUp || "0";
-
-  for (const member of notSignedUp) {
-    const row = document.createElement("label");
-    row.className = "attendance-row attendance-row--dns";
-
-    const nameCol = document.createElement("span");
-    nameCol.className = "attendance-col attendance-col--name";
-    nameCol.textContent = member.name;
-
-    const deductWrap = document.createElement("span");
-    deductWrap.className = "attendance-col attendance-col--points";
-    const deductInput = document.createElement("input");
-    deductInput.type = "text";
-    deductInput.className = "attendance-points-input";
-    deductInput.value = `-${didNotSignUpDeduction}`;
-    deductInput.addEventListener("click", (e) => e.preventDefault());
-    deductWrap.appendChild(deductInput);
-
-    const checkWrap = document.createElement("span");
-    checkWrap.className = "attendance-col attendance-col--check";
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = true;
-    checkbox.className = "attendance-dns-checkbox";
-    checkbox.dataset.rosterName = member.name;
-    checkWrap.appendChild(checkbox);
-
-    row.appendChild(nameCol);
-    row.appendChild(deductWrap);
-    row.appendChild(checkWrap);
-    dnsList.appendChild(row);
-  }
-
   dnsSection.appendChild(dnsList);
   container.appendChild(dnsSection);
+
+  // Sort all bucket lists alphabetically for the initial render. Unexcused starts empty.
+  sortAttendanceList(attendedList);
+  sortAttendanceList(excusedList);
+  sortAttendanceList(dnsList);
 
   // Footer with spinner and confirm button (returned separately so the modal can pin it).
   const footer = document.createElement("div");
@@ -465,9 +504,16 @@ function buildAttendanceForm(
 
     let succeeded = false;
     try {
-      await confirmAndAward([list, unknownList], dnsList, event, eventId, channelId, (msg) => {
-        footerStatus.textContent = msg;
-      });
+      await confirmAndAward(
+        [attendedList, excusedList, unexcusedList, dnsList],
+        unknownList,
+        event,
+        eventId,
+        channelId,
+        (msg) => {
+          footerStatus.textContent = msg;
+        },
+      );
       succeeded = true;
     } catch (err) {
       footerStatus.textContent = `Failed: ${err instanceof Error ? err.message : String(err)}`;
@@ -503,8 +549,8 @@ function buildImportHistoryWrite(eventId: string, event: RaidHelperEvent, channe
 }
 
 async function confirmAndAward(
-  attendanceLists: HTMLElement[],
-  dnsList: HTMLElement,
+  bucketLists: HTMLElement[],
+  unknownList: HTMLElement,
   event: RaidHelperEvent,
   eventId: string,
   channelId: string,
@@ -516,28 +562,33 @@ async function confirmAndAward(
     rosterByName.set(entry.name.toLowerCase(), entry);
   }
 
+  const maxRollMod = parseFloat(settingsStore.get("Maximum rollModifier"));
+  const minRollMod = parseFloat(settingsStore.get("Minimum rollModifier"));
+
+  const applyDelta = (rosterEntry: RosterEntry, points: number): void => {
+    const currentMod = parseFloat(rosterEntry.rollModifier) || 0;
+    let newMod = parseFloat((currentMod + points).toFixed(4));
+    if (points >= 0 && !isNaN(maxRollMod) && newMod > maxRollMod) newMod = maxRollMod;
+    if (points < 0 && !isNaN(minRollMod) && newMod < minRollMod) newMod = minRollMod;
+    rosterEntry.rollModifier = String(newMod);
+  };
+
   const notFound: string[] = [];
-  const rows: Element[] = [];
-  for (const l of attendanceLists) {
-    rows.push(...Array.from(l.querySelectorAll(".attendance-row:not(.attendance-row--header)")));
+
+  // Apply bucket rows (attended / absent / dns). Points carry their own sign.
+  const bucketRows: Element[] = [];
+  for (const l of bucketLists) {
+    bucketRows.push(...Array.from(l.querySelectorAll(".attendance-row:not(.attendance-row--header)")));
   }
-
-  for (const row of rows) {
-    const checkbox = row.querySelector(".attendance-checkbox") as HTMLInputElement | null;
-    if (!checkbox?.checked) continue;
-
-    const awardToInput = row.querySelector(".attendance-award-input") as HTMLInputElement | HTMLSelectElement | null;
+  for (const row of bucketRows) {
+    const awardToInput = row.querySelector(".attendance-award-input") as HTMLInputElement | null;
     const pointsInput = row.querySelector(".attendance-points-input") as HTMLInputElement | null;
     const awardTo = awardToInput?.value.trim() ?? "";
     const points = parseFloat(pointsInput?.value ?? "0") || 0;
 
     if (!awardTo) {
-      // Unknown rows where the user explicitly chose "don't credit" are intentional
-      // (pug / new member) — skip silently. Empty matched rows still warn.
-      if (!row.classList.contains("attendance-row--unknown")) {
-        const signUpName = row.querySelector(".attendance-col--name")?.textContent ?? "Unknown";
-        notFound.push(signUpName);
-      }
+      const displayName = row.querySelector(".attendance-col--name")?.textContent ?? "Unknown";
+      notFound.push(displayName);
       continue;
     }
 
@@ -547,35 +598,29 @@ async function confirmAndAward(
       continue;
     }
 
-    const currentMod = parseFloat(rosterEntry.rollModifier) || 0;
-    let newMod = parseFloat((currentMod + points).toFixed(4));
-    const maxRollMod = parseFloat(settingsStore.get("Maximum rollModifier"));
-    if (!isNaN(maxRollMod) && newMod > maxRollMod) {
-      newMod = maxRollMod;
-    }
-    rosterEntry.rollModifier = String(newMod);
+    applyDelta(rosterEntry, points);
   }
 
-  // Apply "did not sign up" deductions
-  const dnsRows = Array.from(dnsList.querySelectorAll(".attendance-row--dns"));
-  for (const row of dnsRows) {
-    const checkbox = row.querySelector(".attendance-dns-checkbox") as HTMLInputElement | null;
+  // Unknown sign-ups keep the legacy checkbox + credit-to dropdown UI. "Don't credit" is intentional (pug / new member).
+  const unknownRows = Array.from(unknownList.querySelectorAll(".attendance-row:not(.attendance-row--header)"));
+  for (const row of unknownRows) {
+    const checkbox = row.querySelector(".attendance-checkbox") as HTMLInputElement | null;
     if (!checkbox?.checked) continue;
 
-    const rosterName = checkbox.dataset.rosterName ?? "";
+    const awardToInput = row.querySelector(".attendance-award-input") as HTMLInputElement | HTMLSelectElement | null;
     const pointsInput = row.querySelector(".attendance-points-input") as HTMLInputElement | null;
-    const deduction = parseFloat(pointsInput?.value ?? "0") || 0;
+    const awardTo = awardToInput?.value.trim() ?? "";
+    const points = parseFloat(pointsInput?.value ?? "0") || 0;
 
-    const rosterEntry = rosterByName.get(rosterName.toLowerCase());
-    if (!rosterEntry) continue;
+    if (!awardTo) continue;
 
-    const currentMod = parseFloat(rosterEntry.rollModifier) || 0;
-    let newMod = parseFloat((currentMod + deduction).toFixed(4));
-    const minRollMod = parseFloat(settingsStore.get("Minimum rollModifier"));
-    if (!isNaN(minRollMod) && newMod < minRollMod) {
-      newMod = minRollMod;
+    const rosterEntry = rosterByName.get(awardTo.toLowerCase());
+    if (!rosterEntry) {
+      notFound.push(awardTo);
+      continue;
     }
-    rosterEntry.rollModifier = String(newMod);
+
+    applyDelta(rosterEntry, points);
   }
 
   // Build payloads for all sheet writes up front so they can run in parallel.
@@ -797,6 +842,16 @@ function showAttendanceFormModal(eventId: string, raidSettings: RaidSettingsEntr
   });
 }
 
+function parseAttendanceRows(rows: string[][]): AttendanceEntry[] {
+  if (rows.length < 2) return [];
+  return rows.slice(1).map((row) => ({
+    date: row[0]?.trim() ?? "",
+    eventName: row[1]?.trim() ?? "",
+    link: row[2]?.trim() ?? "",
+    roster: row[3] ?? "",
+  }));
+}
+
 export function createAttendancePage(): HTMLElement {
   const page = document.createElement("div");
   page.className = "page attendance-page";
@@ -808,7 +863,16 @@ export function createAttendancePage(): HTMLElement {
   newEntryBtn.className = "btn btn--primary";
   newEntryBtn.textContent = "New Entry";
 
+  const refreshBtn = document.createElement("button");
+  refreshBtn.className = "btn";
+  refreshBtn.textContent = "Refresh previous events";
+
+  const refreshStatus = document.createElement("span");
+  refreshStatus.className = "raid-status";
+
   toolbar.appendChild(newEntryBtn);
+  toolbar.appendChild(refreshBtn);
+  toolbar.appendChild(refreshStatus);
   page.appendChild(toolbar);
 
   const historyContainer = document.createElement("div");
@@ -825,6 +889,24 @@ export function createAttendancePage(): HTMLElement {
       const channelId = String(pickedEvent.channelId ?? "");
       showAttendanceFormModal(eventId, raidSettings, channelId);
     });
+  });
+
+  refreshBtn.addEventListener("click", async () => {
+    refreshBtn.disabled = true;
+    refreshStatus.textContent = "Refreshing...";
+    refreshStatus.className = "raid-status";
+    try {
+      const rows = await window.api.fetchSheet(ATTENDANCE_SHEET);
+      attendanceStore.replaceAll(parseAttendanceRows(rows));
+      refreshStatus.textContent = "Refreshed.";
+      refreshStatus.className = "raid-status raid-status--success";
+      setTimeout(() => { refreshStatus.textContent = ""; }, 3000);
+    } catch (err) {
+      refreshStatus.textContent = `Refresh failed: ${err instanceof Error ? err.message : err}`;
+      refreshStatus.className = "raid-status raid-status--error";
+    } finally {
+      refreshBtn.disabled = false;
+    }
   });
 
   return page;
